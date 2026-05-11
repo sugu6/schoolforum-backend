@@ -95,7 +95,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Upload docker-compose.yml
-        uses: appleboy/scp-action@v0.1.10
+        uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
