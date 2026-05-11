@@ -33,6 +33,9 @@ jobs:
       - name: Compile
         run: ./mvnw compile --batch-mode
 
+      - name: Test
+        run: ./mvnw test --batch-mode
+
       - name: Package
         run: ./mvnw package -DskipTests --batch-mode
 
