@@ -1,0 +1,51 @@
+server:
+  port: 8085
+spring:
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/schoolforum?characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 30000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      connection-test-query: SELECT 1
+      pool-name: SchoolForumHikariCP-Dev
+      leak-detection-threshold: 60000
+
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      password:
+      database: 0
+      timeout: 10s
+
+  mail:
+    host: smtp.qq.com
+    port: 587
+    username: 3342113181@qq.com
+    password: knnxihikcucxcija
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+
+oauth:
+  github:
+    client-id: Ov23ctui8olAxrt6hQeX
+    client-secret: 66ebfa9ddbac39bc4e4aef6747a60c0a82d6a8b0
+#    redirect-uri: http://localhost:8085/oauth/callback/github
+    redirect-uri: http://localhost:5173/callback
+    disable-ssl: true
+
+logging:
+  level:
+    com.example.schoolforum: debug
+    org.springframework.web: debug

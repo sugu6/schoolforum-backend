@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: schoolforum
+  profiles:
+    active: dev
+  jackson:
+    default-property-inclusion: non_null
+  elasticsearch:
+    uris: http://85.137.245.41:9200
+    username: elastic
+    password: Elastic_3c7z3p
+
+server:
+  port: 8085
+
+mybatis-flex:
+  configuration:
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+
+sa-token:
+  token-name: satoken
+  timeout: 604800
+  active-timeout: -1
+  is-concurrent: true
+  is-share: true
+  is-log: false
+  is-read-header: true
+  is-read-cookie: true
+  jwt-secret-key: schoolforum-sa-token-jwt-secret-key-2026
+
+springdoc:
+  swagger-ui:
+    try-it-out-enabled: true
+
+hot-rank:
+  like-weight: 3.0
+  comment-weight: 5.0
+  favorite-weight: 4.0
+  view-weight: 0.1
+  decay-base: 24.0
+  decay-exponent: 1.5
+  essential-bonus: 50.0
+  pinned-bonus: 30.0
+
+file:
+  upload:
+    avatar-path: ./uploads/avatars/
+    post-image-path: ./uploads/post-images/
+    max-size: 5MB
+    allowed-types: image/jpeg,image/png,image/gif,image/webp
