@@ -15,9 +15,28 @@ jobs:
     name: Build & Test
     runs-on: ubuntu-latest
 
+    env:
+      SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/schoolforum?characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: 123456
+      SPRING_DATA_REDIS_HOST: localhost
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      - name: Set up MySQL
+        run: |
+          sudo systemctl start mysql.service
+          sudo mysql -e "CREATE DATABASE IF NOT EXISTS schoolforum;"
+          sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '123456';"
+          sudo mysql -e "FLUSH PRIVILEGES;"
+
+      - name: Set up Redis
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq redis-server
+          sudo systemctl start redis-server
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v5
