@@ -28,9 +28,10 @@ jobs:
       - name: Set up MySQL
         run: |
           sudo systemctl start mysql.service
-          sudo mysql -e "CREATE DATABASE IF NOT EXISTS schoolforum;"
-          sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '123456';"
-          sudo mysql -e "FLUSH PRIVILEGES;"
+          while ! mysqladmin ping --silent 2>/dev/null; do sleep 1; done
+          sudo mysql --protocol=socket -e "CREATE DATABASE IF NOT EXISTS schoolforum;"
+          sudo mysql --protocol=socket -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '123456';"
+          sudo mysql --protocol=socket -e "FLUSH PRIVILEGES;"
 
       - name: Set up Redis
         run: |
