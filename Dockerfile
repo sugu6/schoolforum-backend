@@ -13,6 +13,8 @@ FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
 
+RUN apk add --no-cache netcat-openbsd
+
 COPY --from=build /app/target/*.jar app.jar
 
 ENV TZ=Asia/Shanghai \
