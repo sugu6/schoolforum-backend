@@ -1,15 +1,39 @@
 services:
+  manticore:
+    image: manticoresearch/manticore:latest
+    container_name: manticore
+    restart: always
+    ports:
+      - "9306:9306"
+      - "9308:9308"
+      - "9312:9312"
+    volumes:
+      - manticore_data:/var/lib/manticore
+    environment:
+      - TZ=Asia/Shanghai
+      - EXTRA=1
+    healthcheck:
+      test: ["CMD", "mysqladmin", "-h", "127.0.0.1", "-P", "9306", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
   schoolforum:
     image: ghcr.io/sugeny/schoolforum-backend:latest
     container_name: schoolforum
     restart: always
-    network_mode: host
     env_file:
       - .env
+    command: ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
     environment:
       - TZ=Asia/Shanghai
       - SPRING_PROFILES_ACTIVE=prod
       - JAVA_OPTS=-Xms256m -Xmx512m
+      - MANTICORE_HOST=${MANTICORE_HOST:-http://manticore}
+      - MANTICORE_PORT=${MANTICORE_PORT:-9308}
+    ports:
+      - "8085:8085"
     volumes:
       - /var/log/schoolforum:/var/log/schoolforum
     healthcheck:
@@ -18,3 +42,6 @@ services:
       timeout: 3s
       retries: 3
       start_period: 40s
+
+volumes:
+  manticore_data:
