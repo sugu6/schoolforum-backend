@@ -5,6 +5,7 @@ manticore:
   host: ${MANTICORE_HOST:http://127.0.0.1}
   port: ${MANTICORE_PORT:9308}
 
+spring:
   datasource:
     url: ${DB_URL:jdbc:mysql://85.137.245.41:3306/schoolforum?characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
     username: ${DB_USERNAME:root}
