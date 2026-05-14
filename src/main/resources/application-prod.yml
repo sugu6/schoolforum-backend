@@ -7,6 +7,9 @@ manticore:
   port: ${MANTICORE_PORT:9308}
 
 spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.websocket.servlet.WebSocketServletAutoConfiguration
   datasource:
     url: ${DB_URL:jdbc:mysql://85.137.245.41:3306/schoolforum?characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
     username: ${DB_USERNAME:root}
@@ -66,6 +69,13 @@ sa-token:
   is-read-header: true
   is-read-cookie: true
   jwt-secret-key: ${JWT_SECRET_KEY:schoolforum-sa-token-jwt-secret-key-2026}
+file:
+  upload:
+    avatar-path: ${UPLOAD_AVATAR_PATH:/app/uploads/avatars/}
+    post-image-path: ${UPLOAD_POST_IMAGE_PATH:/app/uploads/post-images/}
+    max-size: 5MB
+    allowed-types: image/jpeg,image/png,image/gif,image/webp
+
 logging:
   level:
     com.example.schoolforum: info

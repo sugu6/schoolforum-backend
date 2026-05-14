@@ -37,6 +37,7 @@ services:
       - "8085:8085"
     volumes:
       - /var/log/schoolforum:/var/log/schoolforum
+      - uploads_data:/app/uploads
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "8085"]
       interval: 30s
@@ -46,3 +47,4 @@ services:
 
 volumes:
   manticore_data:
+  uploads_data:
