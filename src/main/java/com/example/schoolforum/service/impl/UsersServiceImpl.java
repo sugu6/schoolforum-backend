@@ -368,7 +368,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
 
     private void sendEmail(String to, CodeType codeType, String captcha) {
         SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(fromEmail);
+        message.setFrom(mailUsername);
         message.setTo(to);
         message.setSubject(codeType.getDesc()+":"+captcha);
         message.setText(buildEmailContent(codeType, captcha));
