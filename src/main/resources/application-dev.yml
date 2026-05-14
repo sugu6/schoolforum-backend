@@ -49,7 +49,7 @@ oauth:
   github:
     client-id: ${DEV_GITHUB_CLIENT_ID:Ov23ctui8olAxrt6hQeX}
     client-secret: ${DEV_GITHUB_CLIENT_SECRET}
-    redirect-uri: http://localhost:5173/callback
+    redirect-uri: http://localhost:8080/callback
     disable-ssl: true
 
 logging:
