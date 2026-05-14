@@ -48,7 +48,7 @@ cors:
 oauth:
   github:
     client-id: ${DEV_GITHUB_CLIENT_ID:Ov23ctui8olAxrt6hQeX}
-    client-secret: ${DEV_GITHUB_CLIENT_SECRET}
+    client-secret: ${DEV_GITHUB_CLIENT_SECRET:66ebfa9ddbac39bc4e4aef6747a60c0a82d6a8b0}
     redirect-uri: http://localhost:8080/callback
     disable-ssl: true
 
