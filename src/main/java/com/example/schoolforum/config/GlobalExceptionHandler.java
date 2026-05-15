@@ -45,6 +45,10 @@ public class GlobalExceptionHandler {
             message = "账号已在其他设备登录";
         } else if (NotLoginException.KICK_OUT.equals(type)) {
             message = "账号已被踢下线";
+        } else if (NotLoginException.TOKEN_FREEZE.equals(type)) {
+            message = "账号已被冻结";
+        } else if (NotLoginException.NO_PREFIX.equals(type)) {
+            message = "登录凭证格式错误";
         } else {
             message = "请先登录";
         }

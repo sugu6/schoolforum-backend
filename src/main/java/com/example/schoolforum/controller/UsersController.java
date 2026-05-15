@@ -195,9 +195,10 @@ public class UsersController {
 
     @PostMapping("logout")
     @Operation(summary = "用户登出", description = "用户登出接口")
-    @SaCheckLogin
     public String logout() {
-        StpUtil.logout();
+        if (StpUtil.isLogin()) {
+            StpUtil.logout();
+        }
         return "登出成功";
     }
 

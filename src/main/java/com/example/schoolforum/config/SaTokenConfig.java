@@ -49,6 +49,7 @@ public class SaTokenConfig implements WebMvcConfigurer {
                 "/users/captcha",
                 "/users/getInfo/**",
                 "/users/list",
+                "/users/logout",
 
                 // 帖子模块 - 公开接口
                 "/posts/get/**",
