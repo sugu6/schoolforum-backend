@@ -60,8 +60,8 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
     @Override
     public List<ConversationVO> getConversationList(Long userId) {
         QueryWrapper wrapper = QueryWrapper.create()
-                .where("(user1_id = {0} AND user1_deleted = {0})", userId, false)
-                .or("(user2_id = {0} AND user2_deleted = {0})", userId, false)
+                .where("(user1_id = {0} AND user1_deleted = {1})", userId, false)
+                .or("(user2_id = {0} AND user2_deleted = {1})", userId, false)
                 .orderBy("last_message_at", false);
 
         List<Conversation> conversations = conversationMapper.selectListWithRelationsByQuery(wrapper);
