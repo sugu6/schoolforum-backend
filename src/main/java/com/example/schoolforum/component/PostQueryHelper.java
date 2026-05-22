@@ -150,7 +150,7 @@ public class PostQueryHelper {
     public Page<Posts> paginateByCategories(int page, int size, List<Long> categoryIds) {
         QueryWrapper wrapper = baseQuery();
         if (categoryIds != null && !categoryIds.isEmpty()) {
-            wrapper.and(P + ".category_id IN ?", categoryIds);
+            wrapper.and(Posts::getCategoryId).in(categoryIds);
         }
         return postsMapper.paginate(page, size,
                 wrapper.orderBy(P + ".is_pinned", false).orderBy(P + ".created_at", false));
@@ -213,7 +213,7 @@ public class PostQueryHelper {
 
     public QueryWrapper filterCategories(QueryWrapper wrapper, List<Long> categoryIds) {
         if (categoryIds != null && !categoryIds.isEmpty()) {
-            wrapper.and(P + ".category_id IN ?", categoryIds);
+            wrapper.and(Posts::getCategoryId).in(categoryIds);
         }
         return wrapper;
     }
