@@ -150,7 +150,7 @@ public class PostQueryHelper {
     public Page<Posts> paginateByCategories(int page, int size, List<Long> categoryIds) {
         QueryWrapper wrapper = baseQuery();
         if (categoryIds != null && !categoryIds.isEmpty()) {
-            wrapper.and(P + ".category_id IN ({0})", categoryIds.toArray());
+            wrapper.and(P + ".category_id IN ?", categoryIds);
         }
         return postsMapper.paginate(page, size,
                 wrapper.orderBy(P + ".is_pinned", false).orderBy(P + ".created_at", false));
@@ -167,8 +167,8 @@ public class PostQueryHelper {
     public Page<Posts> paginateSearch(String keyword, int page, int size) {
         QueryWrapper wrapper = baseQuery();
         if (keyword != null && !keyword.trim().isEmpty()) {
-            wrapper.and("(" + P + ".title LIKE {0} OR " + P + ".content LIKE {0})",
-                      "%" + keyword.trim() + "%");
+            wrapper.and("(" + P + ".title LIKE ? OR " + P + ".content LIKE ?)",
+                      "%" + keyword.trim() + "%", "%" + keyword.trim() + "%");
         }
         return postsMapper.paginate(page, size,
                 wrapper.orderBy(P + ".is_pinned", false).orderBy(P + ".created_at", false));
@@ -213,7 +213,7 @@ public class PostQueryHelper {
 
     public QueryWrapper filterCategories(QueryWrapper wrapper, List<Long> categoryIds) {
         if (categoryIds != null && !categoryIds.isEmpty()) {
-            wrapper.and(P + ".category_id IN ({0})", categoryIds.toArray());
+            wrapper.and(P + ".category_id IN ?", categoryIds);
         }
         return wrapper;
     }
@@ -227,8 +227,8 @@ public class PostQueryHelper {
 
     public QueryWrapper filterKeyword(QueryWrapper wrapper, String keyword) {
         if (keyword != null && !keyword.trim().isEmpty()) {
-            wrapper.and("(" + P + ".title LIKE {0} OR " + P + ".content LIKE {0})",
-                      "%" + keyword.trim() + "%");
+            wrapper.and("(" + P + ".title LIKE ? OR " + P + ".content LIKE ?)",
+                      "%" + keyword.trim() + "%", "%" + keyword.trim() + "%");
         }
         return wrapper;
     }

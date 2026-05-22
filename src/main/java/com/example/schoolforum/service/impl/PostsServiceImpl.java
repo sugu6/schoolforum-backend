@@ -90,7 +90,7 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
         LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
         
         QueryWrapper wrapper = postQueryHelper.buildBaseQueryWithRelations()
-                .where("p.created_at >= {0}", thirtyDaysAgo)
+                .where("p.created_at >= ?", thirtyDaysAgo)
                 .orderBy("p.like_count", false)
                 .orderBy("p.view_count", false)
                 .orderBy("p.comment_count", false)
