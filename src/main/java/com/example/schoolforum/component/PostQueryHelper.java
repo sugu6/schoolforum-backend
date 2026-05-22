@@ -126,11 +126,11 @@ public class PostQueryHelper {
     }
 
     public Posts selectByIdWithRelations(Long postId) {
-        return postsMapper.selectOneByQuery(baseQuery().where(P + ".id = {0}", postId));
+        return postsMapper.selectOneByQuery(baseQuery().where(P + ".id = ?", postId));
     }
 
     public Posts selectByIdWithTags(Long postId) {
-        return postsMapper.selectOneByQuery(queryWithTags().where(P + ".id = {0}", postId));
+        return postsMapper.selectOneByQuery(queryWithTags().where(P + ".id = ?", postId));
     }
 
     public Page<Posts> paginateAll(int page, int size) {
@@ -141,7 +141,7 @@ public class PostQueryHelper {
     public Page<Posts> paginateByCategory(int page, int size, Long categoryId) {
         QueryWrapper wrapper = baseQuery();
         if (categoryId != null) {
-            wrapper.where(P + ".category_id = {0}", categoryId);
+            wrapper.where(P + ".category_id = ?", categoryId);
         }
         return postsMapper.paginate(page, size,
                 wrapper.orderBy(P + ".is_pinned", false).orderBy(P + ".created_at", false));
@@ -176,7 +176,7 @@ public class PostQueryHelper {
 
     public Page<Posts> paginateByAuthor(Long authorId, int page, int size) {
         return postsMapper.paginate(page, size,
-                baseQuery().where(P + ".author_id = {0}", authorId)
+                baseQuery().where(P + ".author_id = ?", authorId)
                        .orderBy(P + ".updated_at", false));
     }
 
@@ -206,7 +206,7 @@ public class PostQueryHelper {
 
     public QueryWrapper filterCategory(QueryWrapper wrapper, Long categoryId) {
         if (categoryId != null) {
-            wrapper.and(P + ".category_id = {0}", categoryId);
+            wrapper.and(P + ".category_id = ?", categoryId);
         }
         return wrapper;
     }
@@ -220,7 +220,7 @@ public class PostQueryHelper {
 
     public QueryWrapper filterAuthor(QueryWrapper wrapper, Long authorId) {
         if (authorId != null) {
-            wrapper.and(P + ".author_id = {0}", authorId);
+            wrapper.and(P + ".author_id = ?", authorId);
         }
         return wrapper;
     }
