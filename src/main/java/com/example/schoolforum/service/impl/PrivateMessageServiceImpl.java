@@ -18,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
+import static com.example.schoolforum.pojo.table.PrivateMessageTableDef.PRIVATE_MESSAGE;
+
 /**
  * 私信消息表 服务层实现。
  *
@@ -36,8 +38,8 @@ public class PrivateMessageServiceImpl extends ServiceImpl<PrivateMessageMapper,
     @Override
     public Page<PrivateMessage> list(Long conversationId, int page, int size) {
         QueryWrapper wrapper = QueryWrapper.create()
-                .where("conversation_id = {0}", conversationId)
-                .orderBy("created_at", false);
+                .where(PRIVATE_MESSAGE.CONVERSATION_ID.eq(conversationId))
+                .orderBy(PRIVATE_MESSAGE.CREATED_AT.desc());
         return privateMessageMapper.paginateWithRelations(page, size, wrapper);
     }
 
@@ -86,9 +88,9 @@ public class PrivateMessageServiceImpl extends ServiceImpl<PrivateMessageMapper,
         update.setIsRead(true);
 
         QueryWrapper wrapper = QueryWrapper.create()
-                .where("conversation_id = {0}", conversationId)
-                .and("receiver_id = {0}", userId)
-                .and("is_read = 0");
+                .where(PRIVATE_MESSAGE.CONVERSATION_ID.eq(conversationId))
+                .and(PRIVATE_MESSAGE.RECEIVER_ID.eq(userId))
+                .and(PRIVATE_MESSAGE.IS_READ.eq(false));
 
         privateMessageMapper.updateByQuery(update, wrapper);
 

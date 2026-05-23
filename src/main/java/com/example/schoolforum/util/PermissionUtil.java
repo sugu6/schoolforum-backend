@@ -95,4 +95,52 @@ public final class PermissionUtil {
     public static void checkRoleAnd(String... roles) {
         StpUtil.checkRoleAnd(roles);
     }
+
+    /**
+     * 校验用户是否有权操作指定资源（资源不存在或无权均抛出异常）
+     * @param resourceOwnerId 资源所属者ID
+     * @param currentUserId 当前用户ID
+     * @param resourceName 资源名称（用于错误消息）
+     */
+    public static void checkOwnership(Long resourceOwnerId, Long currentUserId, String resourceName) {
+        if (resourceOwnerId == null) {
+            throw new BusinessException(resourceName + "不存在");
+        }
+        if (!resourceOwnerId.equals(currentUserId)) {
+            throw new BusinessException("无权操作此" + resourceName);
+        }
+    }
+
+    /**
+     * 校验用户是否有权删除指定资源
+     * @param resourceOwnerId 资源所属者ID
+     * @param currentUserId 当前用户ID
+     * @param resourceName 资源名称（用于错误消息）
+     */
+    public static void checkDeletePermission(Long resourceOwnerId, Long currentUserId, String resourceName) {
+        if (resourceOwnerId == null) {
+            throw new BusinessException(resourceName + "不存在");
+        }
+        if (!resourceOwnerId.equals(currentUserId)) {
+            throw new BusinessException("无权删除此" + resourceName);
+        }
+    }
+
+    /**
+     * 校验用户是否在指定的用户列表中有权限操作（适用于多方共享资源）
+     * @param authorizedUsers 有权限的用户ID列表
+     * @param currentUserId 当前用户ID
+     * @param resourceName 资源名称（用于错误消息）
+     */
+    public static void checkMultiUserPermission(Long[] authorizedUsers, Long currentUserId, String resourceName) {
+        if (authorizedUsers == null || authorizedUsers.length == 0) {
+            throw new BusinessException(resourceName + "不存在");
+        }
+        for (Long authorizedUserId : authorizedUsers) {
+            if (authorizedUserId != null && authorizedUserId.equals(currentUserId)) {
+                return;
+            }
+        }
+        throw new BusinessException("无权操作此" + resourceName);
+    }
 }

@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+import static com.example.schoolforum.pojo.table.PostsTableDef.POSTS;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -141,10 +143,10 @@ public class PostQueryHelper {
     public Page<Posts> paginateByCategory(int page, int size, Long categoryId) {
         QueryWrapper wrapper = baseQuery();
         if (categoryId != null) {
-            wrapper.where(P + ".category_id = ?", categoryId);
+            wrapper.where(POSTS.as(P).CATEGORY_ID.eq(categoryId));
         }
         return postsMapper.paginate(page, size,
-                wrapper.orderBy(P + ".is_pinned", false).orderBy(P + ".created_at", false));
+                wrapper.orderBy(POSTS.as(P).IS_PINNED.desc()).orderBy(POSTS.as(P).CREATED_AT.desc()));
     }
 
     public Page<Posts> paginateByCategories(int page, int size, List<Long> categoryIds) {
@@ -153,43 +155,44 @@ public class PostQueryHelper {
             wrapper.and(Posts::getCategoryId).in(categoryIds);
         }
         return postsMapper.paginate(page, size,
-                wrapper.orderBy(P + ".is_pinned", false).orderBy(P + ".created_at", false));
+                wrapper.orderBy(POSTS.as(P).IS_PINNED.desc()).orderBy(POSTS.as(P).CREATED_AT.desc()));
     }
 
     public Page<Posts> paginateHot(int page, int size) {
         return postsMapper.paginate(page, size,
-                baseQuery().orderBy(P + ".is_pinned", false)
-                       .orderBy(P + ".like_count", false)
-                       .orderBy(P + ".view_count", false)
-                       .orderBy(P + ".comment_count", false));
+                baseQuery().orderBy(POSTS.as(P).IS_PINNED.desc())
+                       .orderBy(POSTS.as(P).LIKE_COUNT.desc())
+                       .orderBy(POSTS.as(P).VIEW_COUNT.desc())
+                       .orderBy(POSTS.as(P).COMMENT_COUNT.desc()));
     }
 
     public Page<Posts> paginateSearch(String keyword, int page, int size) {
         QueryWrapper wrapper = baseQuery();
         if (keyword != null && !keyword.trim().isEmpty()) {
-            wrapper.and("(" + P + ".title LIKE ? OR " + P + ".content LIKE ?)",
-                      "%" + keyword.trim() + "%", "%" + keyword.trim() + "%");
+            String likeKeyword = "%" + keyword.trim() + "%";
+            wrapper.and(POSTS.as(P).TITLE.like(likeKeyword)
+                    .or(POSTS.as(P).CONTENT.like(likeKeyword)));
         }
         return postsMapper.paginate(page, size,
-                wrapper.orderBy(P + ".is_pinned", false).orderBy(P + ".created_at", false));
+                wrapper.orderBy(POSTS.as(P).IS_PINNED.desc()).orderBy(POSTS.as(P).CREATED_AT.desc()));
     }
 
     public Page<Posts> paginateByAuthor(Long authorId, int page, int size) {
         return postsMapper.paginate(page, size,
-                baseQuery().where(P + ".author_id = ?", authorId)
-                       .orderBy(P + ".updated_at", false));
+                baseQuery().where(POSTS.as(P).AUTHOR_ID.eq(authorId))
+                       .orderBy(POSTS.as(P).UPDATED_AT.desc()));
     }
 
     public Page<Posts> paginatePinned(int page, int size) {
         return postsMapper.paginate(page, size,
-                baseQuery().where(P + ".is_pinned = 1")
-                       .orderBy(P + ".created_at", false));
+                baseQuery().where(POSTS.as(P).IS_PINNED.eq(true))
+                       .orderBy(POSTS.as(P).CREATED_AT.desc()));
     }
 
     public Page<Posts> paginateEssential(int page, int size) {
         return postsMapper.paginate(page, size,
-                baseQuery().where(P + ".is_essential = 1")
-                       .orderBy(P + ".created_at", false));
+                baseQuery().where(POSTS.as(P).IS_ESSENTIAL.eq(true))
+                       .orderBy(POSTS.as(P).CREATED_AT.desc()));
     }
 
     public long countByCategory(Long categoryId) {
@@ -220,37 +223,38 @@ public class PostQueryHelper {
 
     public QueryWrapper filterAuthor(QueryWrapper wrapper, Long authorId) {
         if (authorId != null) {
-            wrapper.and(P + ".author_id = ?", authorId);
+            wrapper.and(POSTS.as(P).AUTHOR_ID.eq(authorId));
         }
         return wrapper;
     }
 
     public QueryWrapper filterKeyword(QueryWrapper wrapper, String keyword) {
         if (keyword != null && !keyword.trim().isEmpty()) {
-            wrapper.and("(" + P + ".title LIKE ? OR " + P + ".content LIKE ?)",
-                      "%" + keyword.trim() + "%", "%" + keyword.trim() + "%");
+            String likeKeyword = "%" + keyword.trim() + "%";
+            wrapper.and(POSTS.as(P).TITLE.like(likeKeyword)
+                    .or(POSTS.as(P).CONTENT.like(likeKeyword)));
         }
         return wrapper;
     }
 
     public QueryWrapper filterPinned(QueryWrapper wrapper) {
-        return wrapper.and(P + ".is_pinned = 1");
+        return wrapper.and(POSTS.as(P).IS_PINNED.eq(true));
     }
 
     public QueryWrapper filterEssential(QueryWrapper wrapper) {
-        return wrapper.and(P + ".is_essential = 1");
+        return wrapper.and(POSTS.as(P).IS_ESSENTIAL.eq(true));
     }
 
     public QueryWrapper sortDefault(QueryWrapper wrapper) {
-        return wrapper.orderBy(P + ".is_pinned", false)
-                     .orderBy(P + ".created_at", false);
+        return wrapper.orderBy(POSTS.IS_PINNED.desc())
+                     .orderBy(POSTS.CREATED_AT.desc());
     }
 
     public QueryWrapper sortHot(QueryWrapper wrapper) {
-        return wrapper.orderBy(P + ".is_pinned", false)
-                     .orderBy(P + ".like_count", false)
-                     .orderBy(P + ".view_count", false)
-                     .orderBy(P + ".comment_count", false);
+        return wrapper.orderBy(POSTS.IS_PINNED.desc())
+                     .orderBy(POSTS.LIKE_COUNT.desc())
+                     .orderBy(POSTS.VIEW_COUNT.desc())
+                     .orderBy(POSTS.COMMENT_COUNT.desc());
     }
 
     public QueryWrapper sortCustom(QueryWrapper wrapper, String field, boolean asc) {

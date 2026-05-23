@@ -8,12 +8,15 @@ import com.example.schoolforum.mapper.ConversationMapper;
 import com.example.schoolforum.pojo.Conversation;
 import com.example.schoolforum.pojo.dto.ConversationVO;
 import com.example.schoolforum.service.ConversationService;
+import com.example.schoolforum.util.PermissionUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+
+import static com.example.schoolforum.pojo.table.ConversationTableDef.CONVERSATION;
 
 /**
  * 私信会话表 服务层实现。
@@ -38,8 +41,8 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
 
         Conversation conversation = conversationMapper.selectOneByQuery(
                 QueryWrapper.create()
-                        .where("user1_id = {0}", smallerId)
-                        .and("user2_id = {0}", largerId)
+                        .where(CONVERSATION.USER1_ID.eq(smallerId))
+                        .and(CONVERSATION.USER2_ID.eq(largerId))
         );
 
         if (conversation == null) {
@@ -60,9 +63,9 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
     @Override
     public List<ConversationVO> getConversationList(Long userId) {
         QueryWrapper wrapper = QueryWrapper.create()
-                .where("(user1_id = {0} AND user1_deleted = {1})", userId, false)
-                .or("(user2_id = {0} AND user2_deleted = {1})", userId, false)
-                .orderBy("last_message_at", false);
+                .where(CONVERSATION.USER1_ID.eq(userId).and(CONVERSATION.USER1_DELETED.eq(false)))
+                .or(CONVERSATION.USER2_ID.eq(userId).and(CONVERSATION.USER2_DELETED.eq(false)))
+                .orderBy(CONVERSATION.LAST_MESSAGE_AT.desc());
 
         List<Conversation> conversations = conversationMapper.selectListWithRelationsByQuery(wrapper);
 
@@ -78,8 +81,8 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
     public int getTotalUnreadCount(Long userId) {
         List<Conversation> conversations = conversationMapper.selectListByQuery(
                 QueryWrapper.create()
-                        .where("user1_id = {0}", userId)
-                        .or("user2_id = {0}", userId)
+                        .where(CONVERSATION.USER1_ID.eq(userId))
+                        .or(CONVERSATION.USER2_ID.eq(userId))
         );
 
         int total = 0;
@@ -141,9 +144,10 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
             throw new BusinessException("会话不存在");
         }
 
-        if (!conversation.getUser1Id().equals(userId) && !conversation.getUser2Id().equals(userId)) {
-            throw new BusinessException("无权删除此会话");
-        }
+        PermissionUtil.checkMultiUserPermission(
+                new Long[]{conversation.getUser1Id(), conversation.getUser2Id()},
+                userId,
+                "会话");
 
         Conversation update = UpdateEntity.of(Conversation.class, conversationId);
         update.setUpdatedAt(LocalDateTime.now());

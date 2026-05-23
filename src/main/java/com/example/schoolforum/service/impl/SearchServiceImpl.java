@@ -316,7 +316,7 @@ public class SearchServiceImpl implements SearchService {
         utilsApi.sql(
                 "CREATE TABLE " + UserDocument.INDEX_NAME + " ("
                         + "username TEXT, "
-                        + "email STRING, "
+                        + "email TEXT, "
                         + "avatar_url STRING, "
                         + "bio TEXT, "
                         + "role INTEGER, "

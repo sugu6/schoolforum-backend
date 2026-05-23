@@ -32,6 +32,14 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static com.example.schoolforum.pojo.table.AccountDeletionRequestTableDef.ACCOUNT_DELETION_REQUEST;
+import static com.example.schoolforum.pojo.table.CommentsTableDef.COMMENTS;
+import static com.example.schoolforum.pojo.table.FavoritesTableDef.FAVORITES;
+import static com.example.schoolforum.pojo.table.FollowsTableDef.FOLLOWS;
+import static com.example.schoolforum.pojo.table.NotificationsTableDef.NOTIFICATIONS;
+import static com.example.schoolforum.pojo.table.PostsTableDef.POSTS;
+import static com.example.schoolforum.pojo.table.PrivateMessageTableDef.PRIVATE_MESSAGE;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -103,8 +111,8 @@ public class AccountDeletionServiceImpl extends ServiceImpl<AccountDeletionReque
     public AccountDeletionRequest getPendingRequest(Long userId) {
         return getMapper().selectOneByQuery(
                 QueryWrapper.create()
-                        .eq("user_id", userId)
-                        .eq("status", DeletionStatus.PENDING)
+                        .where(ACCOUNT_DELETION_REQUEST.USER_ID.eq(userId))
+                        .and(ACCOUNT_DELETION_REQUEST.STATUS.eq(DeletionStatus.PENDING))
         );
     }
 
@@ -115,8 +123,8 @@ public class AccountDeletionServiceImpl extends ServiceImpl<AccountDeletionReque
 
         List<AccountDeletionRequest> expiredRequests = getMapper().selectListByQuery(
                 QueryWrapper.create()
-                        .eq("status", DeletionStatus.PENDING)
-                        .le("scheduled_at", now)
+                        .where(ACCOUNT_DELETION_REQUEST.STATUS.eq(DeletionStatus.PENDING))
+                        .and(ACCOUNT_DELETION_REQUEST.SCHEDULED_AT.le(now))
         );
 
         int processedCount = 0;
@@ -143,9 +151,9 @@ public class AccountDeletionServiceImpl extends ServiceImpl<AccountDeletionReque
     public Page<AccountDeletionRequestVO> listPage(Integer pageNumber, Integer pageSize, DeletionStatus status) {
         QueryWrapper queryWrapper = QueryWrapper.create();
         if (status != null) {
-            queryWrapper.eq("status", status);
+            queryWrapper.where(ACCOUNT_DELETION_REQUEST.STATUS.eq(status));
         }
-        queryWrapper.orderBy("requested_at", false);
+        queryWrapper.orderBy(ACCOUNT_DELETION_REQUEST.REQUESTED_AT.desc());
         
         Page<AccountDeletionRequest> requestPage = this.page(new Page<>(pageNumber, pageSize), queryWrapper);
         
@@ -173,29 +181,29 @@ public class AccountDeletionServiceImpl extends ServiceImpl<AccountDeletionReque
     }
 
     private void deleteUser(Long userId) {
-        notificationsMapper.deleteByQuery(QueryWrapper.create().eq("user_id", userId));
-        notificationsMapper.deleteByQuery(QueryWrapper.create().eq("sender_id", userId));
+        notificationsMapper.deleteByQuery(QueryWrapper.create().where(NOTIFICATIONS.USER_ID.eq(userId)));
+        notificationsMapper.deleteByQuery(QueryWrapper.create().where(NOTIFICATIONS.SENDER_ID.eq(userId)));
 
-        favoritesMapper.deleteByQuery(QueryWrapper.create().eq("user_id", userId));
+        favoritesMapper.deleteByQuery(QueryWrapper.create().where(FAVORITES.USER_ID.eq(userId)));
 
-        followsMapper.deleteByQuery(QueryWrapper.create().eq("follower_id", userId));
-        followsMapper.deleteByQuery(QueryWrapper.create().eq("following_id", userId));
+        followsMapper.deleteByQuery(QueryWrapper.create().where(FOLLOWS.FOLLOWER_ID.eq(userId)));
+        followsMapper.deleteByQuery(QueryWrapper.create().where(FOLLOWS.FOLLOWING_ID.eq(userId)));
 
-        privateMessageMapper.deleteByQuery(QueryWrapper.create().eq("sender_id", userId));
-        privateMessageMapper.deleteByQuery(QueryWrapper.create().eq("receiver_id", userId));
+        privateMessageMapper.deleteByQuery(QueryWrapper.create().where(PRIVATE_MESSAGE.SENDER_ID.eq(userId)));
+        privateMessageMapper.deleteByQuery(QueryWrapper.create().where(PRIVATE_MESSAGE.RECEIVER_ID.eq(userId)));
 
         List<Long> postIds = postsMapper.selectListByQuery(
-                QueryWrapper.create().eq("author_id", userId).select("id")
+                QueryWrapper.create().where(POSTS.AUTHOR_ID.eq(userId)).select("id")
         ).stream().map(post -> post.getId()).toList();
 
         for (Long postId : postIds) {
-            commentsMapper.deleteByQuery(QueryWrapper.create().eq("post_id", postId));
+            commentsMapper.deleteByQuery(QueryWrapper.create().where(COMMENTS.POST_ID.eq(postId)));
             searchService.deletePost(postId);
         }
 
-        postsMapper.deleteByQuery(QueryWrapper.create().eq("author_id", userId));
+        postsMapper.deleteByQuery(QueryWrapper.create().where(POSTS.AUTHOR_ID.eq(userId)));
 
-        commentsMapper.deleteByQuery(QueryWrapper.create().eq("author_id", userId));
+        commentsMapper.deleteByQuery(QueryWrapper.create().where(COMMENTS.AUTHOR_ID.eq(userId)));
 
         searchService.deleteUser(userId);
 

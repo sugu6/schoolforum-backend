@@ -7,16 +7,18 @@ import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.example.schoolforum.enums.NotificationType;
 import com.example.schoolforum.enums.ReadStatus;
 import com.example.schoolforum.enums.RelatedType;
-import com.example.schoolforum.exception.BusinessException;
 import com.example.schoolforum.mapper.NotificationsMapper;
 import com.example.schoolforum.pojo.Notifications;
 import com.example.schoolforum.service.NotificationsService;
+import com.example.schoolforum.util.PermissionUtil;
 import com.example.schoolforum.util.SseEmitterManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+
+import static com.example.schoolforum.pojo.table.NotificationsTableDef.NOTIFICATIONS;
 
 /**
  * 系统通知表 服务层实现。
@@ -33,35 +35,30 @@ public class NotificationsServiceImpl extends ServiceImpl<NotificationsMapper, N
     @Override
     public List<Notifications> listByUserId(Long userId) {
         QueryWrapper wrapper = QueryWrapper.create()
-                .where("user_id = {0}", userId)
-                .orderBy("created_at", false);
+                .where(NOTIFICATIONS.USER_ID.eq(userId))
+                .orderBy(NOTIFICATIONS.CREATED_AT.desc());
         return getMapper().selectListWithRelationsByQuery(wrapper);
     }
 
     @Override
     public Page<Notifications> list(Long userId, int pageNumber, int pageSize) {
         QueryWrapper wrapper = QueryWrapper.create()
-                .where("user_id = {0}", userId)
-                .orderBy("created_at", false);
+                .where(NOTIFICATIONS.USER_ID.eq(userId))
+                .orderBy(NOTIFICATIONS.CREATED_AT.desc());
         return getMapper().paginate(pageNumber, pageSize, wrapper);
     }
 
     @Override
     public long getUnreadCount(Long userId) {
         return getMapper().selectCountByQuery(QueryWrapper.create()
-                .where("user_id = {0}", userId)
-                .and("is_read = {0}", ReadStatus.UNREAD.getCode()));
+                .where(NOTIFICATIONS.USER_ID.eq(userId))
+                .and(NOTIFICATIONS.IS_READ.eq(ReadStatus.UNREAD)));
     }
 
     @Override
     public void markAsRead(Long notificationId, Long userId) {
         Notifications notification = this.getById(notificationId);
-        if (notification == null) {
-            throw new BusinessException("通知不存在");
-        }
-        if (!notification.getUserId().equals(userId)) {
-            throw new BusinessException("无权操作此通知");
-        }
+        PermissionUtil.checkOwnership(notification != null ? notification.getUserId() : null, userId, "通知");
         
         Notifications update = UpdateEntity.of(Notifications.class, notificationId);
         update.setIsRead(ReadStatus.READ);
@@ -75,8 +72,8 @@ public class NotificationsServiceImpl extends ServiceImpl<NotificationsMapper, N
         notification.setIsRead(ReadStatus.READ);
         notification.setUpdatedAt(LocalDateTime.now());
         getMapper().updateByQuery(notification, QueryWrapper.create()
-                .where("user_id = {0}", userId)
-                .and("is_read = {0}", ReadStatus.UNREAD.getCode()));
+                .where(NOTIFICATIONS.USER_ID.eq(userId))
+                .and(NOTIFICATIONS.IS_READ.eq(ReadStatus.UNREAD)));
     }
 
     @Override
@@ -102,12 +99,7 @@ public class NotificationsServiceImpl extends ServiceImpl<NotificationsMapper, N
     @Override
     public void deleteNotification(Long notificationId, Long userId) {
         Notifications notification = this.getById(notificationId);
-        if (notification == null) {
-            throw new BusinessException("通知不存在");
-        }
-        if (!notification.getUserId().equals(userId)) {
-            throw new BusinessException("无权删除此通知");
-        }
+        PermissionUtil.checkDeletePermission(notification != null ? notification.getUserId() : null, userId, "通知");
         
         this.removeById(notificationId);
     }

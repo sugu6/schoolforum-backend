@@ -174,7 +174,7 @@ public class TagsServiceImpl extends ServiceImpl<TagsMapper, Tags> implements Ta
                 .select("t.name")
                 .from("post_tags").as("pt")
                 .leftJoin("tags").as("t").on("pt.tag_id = t.id")
-                .where("pt.post_id = {0}", postId);
+                .where(POST_TAGS.as("pt").POST_ID.eq(postId));
 
         List<Tags> tags = tagsMapper.selectListByQuery(wrapper);
         return tags.stream()

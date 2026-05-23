@@ -50,6 +50,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static com.example.schoolforum.pojo.table.PostsTableDef.POSTS;
+import static com.example.schoolforum.pojo.table.PostTagsTableDef.POST_TAGS;
 
 @Slf4j
 @Service
@@ -90,7 +91,7 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
         LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
         
         QueryWrapper wrapper = postQueryHelper.buildBaseQueryWithRelations()
-                .where("p.created_at >= ?", thirtyDaysAgo)
+                .where(POSTS.CREATED_AT.ge(thirtyDaysAgo))
                 .orderBy("p.like_count", false)
                 .orderBy("p.view_count", false)
                 .orderBy("p.comment_count", false)
@@ -335,7 +336,7 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
     @Override
     public Posts getPostWithViewCount(Long postId, boolean increment) {
         QueryWrapper wrapper = postQueryHelper.buildBaseQueryWithRelations()
-                .where("p.id = {0}", postId);
+                .where(POSTS.ID.eq(postId));
 
         Posts post = postsMapper.selectOneByQuery(wrapper);
         if (post == null) {
@@ -606,7 +607,7 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
         List<Long> categoryIds = getCategoryIds(categoryId);
 
         QueryWrapper wrapper = postQueryHelper.buildBaseQueryWithRelations()
-                .where("p.is_essential = {0}", EssentialStatus.ESSENTIAL.getCode())
+                .where(POSTS.IS_ESSENTIAL.eq(EssentialStatus.ESSENTIAL))
                 .orderBy("p.is_pinned", false)
                 .orderBy("p.created_at", false);
 
@@ -623,7 +624,7 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
     @Override
     public Page<Posts> listByAuthor(Long authorId, int pageNumber, int pageSize) {
         QueryWrapper wrapper = postQueryHelper.buildBaseQueryWithRelations()
-                .where("p.author_id = {0}", authorId)
+                .where(POSTS.AUTHOR_ID.eq(authorId))
                 .orderBy("p.is_pinned", false)
                 .orderBy("p.created_at", false);
 
@@ -689,7 +690,7 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
                     .from("posts").as("p")
                     .leftJoin("users").as("u").on("p.author_id = u.id")
                     .leftJoin("post_tags").as("pt").on("p.id = pt.post_id")
-                    .and("pt.tag_id IN (" + tagIds.stream().map(String::valueOf).collect(Collectors.joining(",")) + ")")
+                    .where("pt.tag_id IN (" + tagIds.stream().map(String::valueOf).collect(Collectors.joining(",")) + ")")
                     .and("p.id NOT IN (" + excludeIds.stream().map(String::valueOf).collect(Collectors.joining(",")) + ")")
                     .limit(limit * 2);
             
@@ -730,7 +731,7 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
         QueryWrapper wrapper = QueryWrapper.create()
                 .select("tag_id")
                 .from("post_tags")
-                .where("post_id = {0}", postId);
+                .where(POST_TAGS.POST_ID.eq(postId));
         
         List<PostTags> postTags = postsMapper.selectListByQueryAs(wrapper, 
                 (Class<PostTags>)(Class<?>)PostTags.class);

@@ -20,6 +20,8 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.example.schoolforum.pojo.table.FollowsTableDef.FOLLOWS;
+
 /**
  * 关注表 服务层实现。
  *
@@ -48,8 +50,8 @@ public class FollowsServiceImpl extends ServiceImpl<FollowsMapper, Follows> impl
         }
 
         QueryWrapper checkWrapper = QueryWrapper.create()
-                .eq("follower_id", followerId)
-                .eq("following_id", followingId);
+                .where(FOLLOWS.FOLLOWER_ID.eq(followerId))
+                .and(FOLLOWS.FOLLOWING_ID.eq(followingId));
         if (getMapper().selectCountByQuery(checkWrapper) > 0) {
             throw new BusinessException("已关注该用户");
         }
@@ -82,8 +84,8 @@ public class FollowsServiceImpl extends ServiceImpl<FollowsMapper, Follows> impl
     @Transactional
     public void unfollowUser(Long followerId, Long followingId) {
         QueryWrapper wrapper = QueryWrapper.create()
-                .eq("follower_id", followerId)
-                .eq("following_id", followingId);
+                .where(FOLLOWS.FOLLOWER_ID.eq(followerId))
+                .and(FOLLOWS.FOLLOWING_ID.eq(followingId));
         int deleted = getMapper().deleteByQuery(wrapper);
         if (deleted == 0) {
             throw new BusinessException("未关注该用户");
@@ -106,8 +108,8 @@ public class FollowsServiceImpl extends ServiceImpl<FollowsMapper, Follows> impl
     @Override
     public boolean isFollowing(Long followerId, Long followingId) {
         QueryWrapper wrapper = QueryWrapper.create()
-                .eq("follower_id", followerId)
-                .eq("following_id", followingId);
+                .where(FOLLOWS.FOLLOWER_ID.eq(followerId))
+                .and(FOLLOWS.FOLLOWING_ID.eq(followingId));
         return getMapper().selectCountByQuery(wrapper) > 0;
     }
 
@@ -116,7 +118,7 @@ public class FollowsServiceImpl extends ServiceImpl<FollowsMapper, Follows> impl
         QueryWrapper wrapper = QueryWrapper.create()
                 .select("f.*")
                 .from("follows").as("f")
-                .where("f.follower_id = {0}", userId)
+                .where(FOLLOWS.as("f").FOLLOWER_ID.eq(userId))
                 .orderBy("f.created_at", false);
         List<Follows> follows = getMapper().selectListByQuery(wrapper);
 
@@ -140,7 +142,7 @@ public class FollowsServiceImpl extends ServiceImpl<FollowsMapper, Follows> impl
         QueryWrapper wrapper = QueryWrapper.create()
                 .select("f.*")
                 .from("follows").as("f")
-                .where("f.following_id = {0}", userId)
+                .where(FOLLOWS.as("f").FOLLOWING_ID.eq(userId))
                 .orderBy("f.created_at", false);
         List<Follows> follows = getMapper().selectListByQuery(wrapper);
 
@@ -165,7 +167,7 @@ public class FollowsServiceImpl extends ServiceImpl<FollowsMapper, Follows> impl
                 .select("u.*")
                 .from("follows").as("f")
                 .leftJoin("users").as("u").on("f.following_id = u.id")
-                .where("f.follower_id = {0}", userId)
+                .where(FOLLOWS.as("f").FOLLOWER_ID.eq(userId))
                 .orderBy("f.created_at", false);
         Page<Users> page = usersMapper.paginate(pageNumber, pageSize, wrapper);
         page.getRecords().forEach(u -> u.setPassword(null));
@@ -178,7 +180,7 @@ public class FollowsServiceImpl extends ServiceImpl<FollowsMapper, Follows> impl
                 .select("u.*")
                 .from("follows").as("f")
                 .leftJoin("users").as("u").on("f.follower_id = u.id")
-                .where("f.following_id = {0}", userId)
+                .where(FOLLOWS.as("f").FOLLOWING_ID.eq(userId))
                 .orderBy("f.created_at", false);
         Page<Users> page = usersMapper.paginate(pageNumber, pageSize, wrapper);
         page.getRecords().forEach(u -> u.setPassword(null));
