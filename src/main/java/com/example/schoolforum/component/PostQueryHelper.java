@@ -246,15 +246,15 @@ public class PostQueryHelper {
     }
 
     public QueryWrapper sortDefault(QueryWrapper wrapper) {
-        return wrapper.orderBy(POSTS.IS_PINNED.desc())
-                     .orderBy(POSTS.CREATED_AT.desc());
+        return wrapper.orderBy(POSTS.as(P).IS_PINNED.desc())
+                     .orderBy(POSTS.as(P).CREATED_AT.desc());
     }
 
     public QueryWrapper sortHot(QueryWrapper wrapper) {
-        return wrapper.orderBy(POSTS.IS_PINNED.desc())
-                     .orderBy(POSTS.LIKE_COUNT.desc())
-                     .orderBy(POSTS.VIEW_COUNT.desc())
-                     .orderBy(POSTS.COMMENT_COUNT.desc());
+        return wrapper.orderBy(POSTS.as(P).IS_PINNED.desc())
+                     .orderBy(POSTS.as(P).LIKE_COUNT.desc())
+                     .orderBy(POSTS.as(P).VIEW_COUNT.desc())
+                     .orderBy(POSTS.as(P).COMMENT_COUNT.desc());
     }
 
     public QueryWrapper sortCustom(QueryWrapper wrapper, String field, boolean asc) {
