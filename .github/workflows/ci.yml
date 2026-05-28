@@ -137,8 +137,8 @@ jobs:
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DOCKER_HOST }}
-          username: ${{ secrets.DOCKER_USER }}
-          key: ${{ secrets.DOCKER_SSH_KEY }}
+          username: root
+          password: ${{ secrets.ROOT_PASSWORD }}
           port: ${{ secrets.DOCKER_PORT || 22 }}
           source: docker-compose.yml,ssl/
           target: /opt/schoolforum/
@@ -148,8 +148,8 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DOCKER_HOST }}
-          username: ${{ secrets.DOCKER_USER }}
-          key: ${{ secrets.DOCKER_SSH_KEY }}
+          username: root
+          password: ${{ secrets.ROOT_PASSWORD }}
           port: ${{ secrets.DOCKER_PORT || 22 }}
           script_stop: true
           script: |
