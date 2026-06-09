@@ -25,13 +25,12 @@ services:
     restart: always
     env_file:
       - .env
-    command: ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+    command: ["sh", "-c", "java ${JAVA_OPTS:--Xms256m -Xmx512m} -jar app.jar"]
     environment:
       - TZ=Asia/Shanghai
       - SPRING_PROFILES_ACTIVE=prod
       - SERVER_ADDRESS=0.0.0.0
       - SERVER_PORT=8085
-      - JAVA_OPTS=-Xms256m -Xmx512m
       - MANTICORE_HOST=${MANTICORE_HOST:-http://manticore}
       - MANTICORE_PORT=${MANTICORE_PORT:-9308}
     ports:
@@ -41,7 +40,7 @@ services:
       - uploads_data:/app/uploads
     depends_on:
       manticore:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "8085"]
       interval: 30s
