@@ -50,7 +50,7 @@ oauth:
   github:
     client-id: ${GITHUB_CLIENT_ID:}
     client-secret: ${GITHUB_CLIENT_SECRET:}
-    redirect-uri: ${GITHUB_REDIRECT_URI:http://38.76.209.225:8085/oauth/callback/github}
+    redirect-uri: ${GITHUB_REDIRECT_URI:https://suguny.github.io/schoolforum/callback}
 
 springdoc:
   swagger-ui:
