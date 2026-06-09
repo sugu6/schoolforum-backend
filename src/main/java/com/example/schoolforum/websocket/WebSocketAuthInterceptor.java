@@ -25,13 +25,14 @@ public class WebSocketAuthInterceptor implements HandshakeInterceptor {
     public static final String USER_ID_KEY = "userId";
 
     @Override
-    public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response, 
+    public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
                                     WebSocketHandler wsHandler, Map<String, Object> attributes) throws Exception {
         if (request instanceof ServletServerHttpRequest servletRequest) {
             String token = servletRequest.getServletRequest().getParameter("token");
-            
+
             if (token == null || token.isEmpty()) {
                 log.warn("WebSocket 握手失败: 缺少 token 参数");
+                response.setStatusCode(org.springframework.http.HttpStatus.UNAUTHORIZED);
                 return false;
             }
 
@@ -39,19 +40,22 @@ public class WebSocketAuthInterceptor implements HandshakeInterceptor {
                 Object loginId = StpUtil.getLoginIdByToken(token);
                 if (loginId == null) {
                     log.warn("WebSocket 握手失败: 无效的 token");
+                    response.setStatusCode(org.springframework.http.HttpStatus.UNAUTHORIZED);
                     return false;
                 }
 
                 Long userId = Long.parseLong(loginId.toString());
                 attributes.put(USER_ID_KEY, userId);
-                log.debug("WebSocket 握手成功: userId={}", userId);
+                log.info("WebSocket 握手成功: userId={}", userId);
                 return true;
             } catch (Exception e) {
                 log.warn("WebSocket 握手失败: token 验证异常 - {}", e.getMessage());
+                response.setStatusCode(org.springframework.http.HttpStatus.UNAUTHORIZED);
                 return false;
             }
         }
 
+        response.setStatusCode(org.springframework.http.HttpStatus.FORBIDDEN);
         return false;
     }
 
