@@ -3,6 +3,7 @@ package com.example.schoolforum.controller;
 import cn.dev33.satoken.annotation.SaCheckRole;
 import cn.dev33.satoken.annotation.SaMode;
 import com.example.schoolforum.enums.ActiveStatus;
+import com.example.schoolforum.exception.BusinessException;
 import com.example.schoolforum.pojo.Categories;
 import com.example.schoolforum.service.CategoriesService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -43,7 +44,7 @@ public class CategoriesController {
     public Categories getById(@PathVariable Long id) {
         Categories category = categoriesService.getById(id);
         if (category == null) {
-            throw new IllegalArgumentException("分类不存在");
+            throw new BusinessException("分类不存在");
         }
         return category;
     }

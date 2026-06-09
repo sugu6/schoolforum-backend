@@ -294,7 +294,11 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
             categoriesService.updatePostCount(categoryId);
         }
 
-        searchService.indexPostById(post.getId());
+        try {
+            searchService.indexPostById(post.getId());
+        } catch (Exception e) {
+            log.warn("搜索索引失败（不影响帖子创建）: postId={}, error={}", post.getId(), e.getMessage());
+        }
 
         log.info("帖子创建成功: postId={}, authorId={}, categoryId={}", post.getId(), authorId, categoryId);
         return post;
@@ -333,7 +337,11 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
 
         this.updateById(post);
 
-        searchService.indexPostById(postId);
+        try {
+            searchService.indexPostById(postId);
+        } catch (Exception e) {
+            log.warn("搜索索引失败（不影响帖子更新）: postId={}, error={}", postId, e.getMessage());
+        }
 
         log.info("帖子更新成功: postId={}, userId={}", postId, userId);
         return post;
@@ -412,14 +420,7 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
 
     @Override
     public Page<Posts> list(int pageNumber, int pageSize) {
-        QueryWrapper wrapper = postQueryHelper.buildBaseQueryWithRelations()
-                .orderBy("p.is_pinned", false)
-                .orderBy("p.created_at", false);
-
-        Page<Posts> page = postsMapper.paginate(pageNumber, pageSize, wrapper);
-        fillRealTimeStats(page.getRecords());
-        fillTagsForPosts(page.getRecords());
-        return page;
+        return listPage(pageNumber, pageSize);
     }
 
     @Override
@@ -491,29 +492,7 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
     }
 
     private void fillRealTimeStats(Posts post) {
-        try {
-            Integer realTimeViewCount = viewCountCache.getRealTimeViewCount(post.getId());
-            if (realTimeViewCount != null && realTimeViewCount > 0) {
-                post.setViewCount(realTimeViewCount);
-            }
-
-            Integer realTimeLikeCount = postStatsCache.getRealTimeLikeCount(post.getId());
-            if (realTimeLikeCount != null && realTimeLikeCount > 0) {
-                post.setLikeCount(realTimeLikeCount);
-            }
-
-            Integer realTimeCommentCount = postStatsCache.getRealTimeCommentCount(post.getId());
-            if (realTimeCommentCount != null && realTimeCommentCount > 0) {
-                post.setCommentCount(realTimeCommentCount);
-            }
-
-            Integer realTimeFavoriteCount = postStatsCache.getRealTimeFavoriteCount(post.getId());
-            if (realTimeFavoriteCount != null && realTimeFavoriteCount > 0) {
-                post.setFavoriteCount(realTimeFavoriteCount);
-            }
-        } catch (Exception e) {
-            log.warn("填充帖子实时统计数据失败，使用数据库原始数据: postId={}, error={}", post.getId(), e.getMessage());
-        }
+        fillRealTimeStats(List.of(post));
     }
 
     private void fillTagsForPosts(List<Posts> posts) {
@@ -581,7 +560,7 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
     public void unlikePost(Long postId) {
         Posts update = UpdateEntity.of(Posts.class, postId);
         UpdateWrapper<Posts> wrapper = UpdateWrapper.of(update);
-        wrapper.set(POSTS.LIKE_COUNT, POSTS.LIKE_COUNT.add(-1));
+        wrapper.setRaw(POSTS.LIKE_COUNT, "GREATEST(like_count - 1, 0)");
         int updated = postsMapper.update(update);
         if (updated > 0) {
             postStatsCache.decrementLikeCount(postId);
@@ -619,7 +598,7 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
     public void unfavoritePost(Long postId) {
         Posts update = UpdateEntity.of(Posts.class, postId);
         UpdateWrapper<Posts> wrapper = UpdateWrapper.of(update);
-        wrapper.set(POSTS.FAVORITE_COUNT, POSTS.FAVORITE_COUNT.add(-1));
+        wrapper.setRaw(POSTS.FAVORITE_COUNT, "GREATEST(favorite_count - 1, 0)");
         int updated = postsMapper.update(update);
         if (updated > 0) {
             postStatsCache.decrementFavoriteCount(postId);
@@ -722,31 +701,28 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
         
         if (currentPost.getCategoryId() != null) {
             QueryWrapper wrapper = postQueryHelper.buildBaseQueryWithRelations()
-                    .where(POSTS.CATEGORY_ID.eq(currentPost.getCategoryId()))
-                    .where(POSTS.ID.notIn(excludeIds))
+                    .where("p.category_id = {0}", currentPost.getCategoryId())
+                    .and("p.id NOT IN ({0})", excludeIds.stream().map(String::valueOf).collect(Collectors.joining(",")))
                     .limit(limit * 2);
-            
+
             List<Posts> categoryPosts = postsMapper.selectListByQuery(wrapper);
             relatedPosts.addAll(categoryPosts);
-            
+
             for (Posts post : categoryPosts) {
                 excludeIds.add(post.getId());
             }
         }
 
         if (tagIds != null && !tagIds.isEmpty() && relatedPosts.size() < limit) {
-            QueryWrapper wrapper = QueryWrapper.create()
-                    .select("p.*", "u.name as author_name", "u.avatar as author_avatar")
-                    .from("posts").as("p")
-                    .leftJoin("users").as("u").on("p.author_id = u.id")
+            QueryWrapper wrapper = postQueryHelper.buildBaseQueryWithRelations()
                     .leftJoin("post_tags").as("pt").on("p.id = pt.post_id")
-                    .where("pt.tag_id IN (" + tagIds.stream().map(String::valueOf).collect(Collectors.joining(",")) + ")")
-                    .and("p.id NOT IN (" + excludeIds.stream().map(String::valueOf).collect(Collectors.joining(",")) + ")")
+                    .where("pt.tag_id IN ({0})", tagIds.stream().map(String::valueOf).collect(Collectors.joining(",")))
+                    .and("p.id NOT IN ({0})", excludeIds.stream().map(String::valueOf).collect(Collectors.joining(",")))
                     .limit(limit * 2);
-            
+
             List<Posts> tagPosts = postsMapper.selectListByQuery(wrapper);
             relatedPosts.addAll(tagPosts);
-            
+
             for (Posts post : tagPosts) {
                 excludeIds.add(post.getId());
             }
@@ -754,10 +730,10 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
 
         if (relatedPosts.size() < limit) {
             QueryWrapper wrapper = postQueryHelper.buildBaseQueryWithRelations()
-                    .where(POSTS.ID.notIn(excludeIds))
+                    .where("p.id NOT IN ({0})", excludeIds.stream().map(String::valueOf).collect(Collectors.joining(",")))
                     .orderBy("RAND()")
                     .limit(limit - relatedPosts.size());
-            
+
             List<Posts> randomPosts = postsMapper.selectListByQuery(wrapper);
             relatedPosts.addAll(randomPosts);
         }

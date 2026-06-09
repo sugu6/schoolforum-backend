@@ -1,6 +1,7 @@
 package com.example.schoolforum.service.impl;
 
 import com.mybatisflex.core.query.QueryWrapper;
+import com.mybatisflex.core.update.UpdateWrapper;
 import com.mybatisflex.core.util.UpdateEntity;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.example.schoolforum.exception.BusinessException;
@@ -10,6 +11,7 @@ import com.example.schoolforum.pojo.dto.ConversationVO;
 import com.example.schoolforum.service.ConversationService;
 import com.example.schoolforum.util.PermissionUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -54,7 +56,16 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
                     .createdAt(LocalDateTime.now())
                     .updatedAt(LocalDateTime.now())
                     .build();
-            conversationMapper.insert(conversation);
+            try {
+                conversationMapper.insert(conversation);
+            } catch (DuplicateKeyException e) {
+                // 并发插入冲突，回退到查询已有记录
+                conversation = conversationMapper.selectOneByQuery(
+                        QueryWrapper.create()
+                                .where(CONVERSATION.USER1_ID.eq(smallerId))
+                                .and(CONVERSATION.USER2_ID.eq(largerId))
+                );
+            }
         }
 
         return conversation;
@@ -108,11 +119,11 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
         update.setUpdatedAt(LocalDateTime.now());
 
         if (conversation.getUser1Id().equals(receiverId)) {
-            int currentCount = conversation.getUser1UnreadCount() != null ? conversation.getUser1UnreadCount() : 0;
-            update.setUser1UnreadCount(currentCount + 1);
+            UpdateWrapper<Conversation> wrapper = UpdateWrapper.of(update);
+            wrapper.set(CONVERSATION.USER1_UNREAD_COUNT, CONVERSATION.USER1_UNREAD_COUNT.add(1));
         } else {
-            int currentCount = conversation.getUser2UnreadCount() != null ? conversation.getUser2UnreadCount() : 0;
-            update.setUser2UnreadCount(currentCount + 1);
+            UpdateWrapper<Conversation> wrapper = UpdateWrapper.of(update);
+            wrapper.set(CONVERSATION.USER2_UNREAD_COUNT, CONVERSATION.USER2_UNREAD_COUNT.add(1));
         }
 
         conversationMapper.update(update);

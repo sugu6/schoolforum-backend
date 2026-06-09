@@ -8,15 +8,36 @@ import cn.dev33.satoken.stp.StpLogic;
 import cn.dev33.satoken.stp.StpUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import jakarta.annotation.PostConstruct;
+
 @Slf4j
 @Configuration
 @RequiredArgsConstructor
 public class SaTokenConfig implements WebMvcConfigurer {
+
+    @Value("${sa-token.jwt-secret-key:}")
+    private String jwtSecretKey;
+
+    @Value("${spring.profiles.active:dev}")
+    private String activeProfile;
+
+    @PostConstruct
+    public void checkJwtSecret() {
+        if ("prod".equals(activeProfile)) {
+            if (jwtSecretKey == null || jwtSecretKey.isEmpty()) {
+                throw new IllegalStateException("生产环境必须配置 JWT_SECRET_KEY 环境变量");
+            }
+            if (jwtSecretKey.contains("dev") || jwtSecretKey.contains("do-not-use")) {
+                throw new IllegalStateException("生产环境禁止使用开发默认 JWT 密钥，请配置强随机密钥");
+            }
+        }
+    }
 
     @Bean
     public StpLogic getStpLogicJwt() {
@@ -46,6 +67,7 @@ public class SaTokenConfig implements WebMvcConfigurer {
                 "/users/login",
                 "/users/register",
                 "/users/resetPassword",
+                "/users/verifyCaptcha",
                 "/users/captcha",
                 "/users/getInfo/**",
                 "/users/list",
@@ -59,6 +81,7 @@ public class SaTokenConfig implements WebMvcConfigurer {
                 "/posts/list/essential",
                 "/posts/*/like",
                 "/posts/*/unlike",
+                "/posts/*/related",
                 "/posts/user/**",
 
                 // 分类模块 - 公开接口
@@ -102,7 +125,8 @@ public class SaTokenConfig implements WebMvcConfigurer {
                 "/count",
 
                 // OAuth 登录
-                "/oauth/**",
+                "/oauth/render/github",
+                "/oauth/callback/github",
 
                 // Swagger 文档
                 "/swagger-ui/**",

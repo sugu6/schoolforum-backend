@@ -71,6 +71,7 @@ public class CommentsController {
     public Page<Comments> listPage(
             @RequestParam(defaultValue = "1") int pageNumber,
             @RequestParam(defaultValue = "10") int pageSize) {
+        if (pageSize > 100) pageSize = 100;
         return commentsService.listPage(pageNumber, pageSize);
     }
 
@@ -79,6 +80,7 @@ public class CommentsController {
     public Page<Comments> list(
             @RequestParam(defaultValue = "1") int pageNumber,
             @RequestParam(defaultValue = "10") int pageSize) {
+        if (pageSize > 100) pageSize = 100;
         return commentsService.list(pageNumber, pageSize);
     }
 

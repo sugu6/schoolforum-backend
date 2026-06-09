@@ -71,7 +71,6 @@ public class SearchServiceImpl implements SearchService {
             InsertDocumentRequest docRequest = new InsertDocumentRequest();
             Map<String, Object> doc = new HashMap<>();
             doc.put("username", document.getUsername());
-            doc.put("email", document.getEmail());
             doc.put("avatar_url", document.getAvatarUrl());
             doc.put("bio", document.getBio());
             doc.put("role", toRoleInt(document.getRole()));
@@ -316,7 +315,6 @@ public class SearchServiceImpl implements SearchService {
         utilsApi.sql(
                 "CREATE TABLE " + UserDocument.INDEX_NAME + " ("
                         + "username TEXT, "
-                        + "email TEXT, "
                         + "avatar_url STRING, "
                         + "bio TEXT, "
                         + "role INTEGER, "
@@ -361,7 +359,6 @@ public class SearchServiceImpl implements SearchService {
             InsertDocumentRequest docRequest = new InsertDocumentRequest();
             Map<String, Object> docMap = new HashMap<>();
             docMap.put("username", doc.getUsername());
-            docMap.put("email", doc.getEmail());
             docMap.put("avatar_url", doc.getAvatarUrl());
             docMap.put("bio", doc.getBio());
             docMap.put("role", doc.getRole());
@@ -442,7 +439,7 @@ public class SearchServiceImpl implements SearchService {
             searchRequest.setIndex(UserDocument.INDEX_NAME);
 
             Map<String, Object> matchQuery = new HashMap<>();
-            matchQuery.put("username,email,bio", query);
+            matchQuery.put("username,bio", query);
             Map<String, Object> queryMap = new HashMap<>();
             queryMap.put("match", matchQuery);
             searchRequest.setQuery(queryMap);
@@ -463,7 +460,7 @@ public class SearchServiceImpl implements SearchService {
                         return UserSearchDocument.builder()
                                 .id(toLong(hit.get("_id")))
                                 .username((String) source.get("username"))
-                                .email((String) source.get("email"))
+                                .email(null)
                                 .avatarUrl((String) source.get("avatar_url"))
                                 .bio((String) source.get("bio"))
                                 .role(toRoleString(toInteger(source.get("role"))))

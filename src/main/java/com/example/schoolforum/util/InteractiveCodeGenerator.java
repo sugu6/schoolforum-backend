@@ -18,9 +18,9 @@ public class InteractiveCodeGenerator {
     public static void main(String[] args) {
         try {
             HikariDataSource dataSource = new HikariDataSource();
-            dataSource.setJdbcUrl("jdbc:mysql://127.0.0.1:3306/schoolforum?characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true");
-            dataSource.setUsername("root");
-            dataSource.setPassword("123456");
+            dataSource.setJdbcUrl(System.getenv().getOrDefault("DB_URL", "jdbc:mysql://127.0.0.1:3306/schoolforum?characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true"));
+            dataSource.setUsername(System.getenv().getOrDefault("DB_USERNAME", "root"));
+            dataSource.setPassword(System.getenv().getOrDefault("DB_PASSWORD", ""));
             dataSource.setDriverClassName("com.mysql.cj.jdbc.Driver");
 
             System.out.print("请输入作者名称: ");

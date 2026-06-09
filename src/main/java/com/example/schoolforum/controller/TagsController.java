@@ -3,6 +3,7 @@ package com.example.schoolforum.controller;
 import cn.dev33.satoken.annotation.SaCheckRole;
 import cn.dev33.satoken.annotation.SaMode;
 import com.example.schoolforum.enums.ActiveStatus;
+import com.example.schoolforum.exception.BusinessException;
 import com.example.schoolforum.pojo.Tags;
 import com.example.schoolforum.service.TagsService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -56,7 +57,7 @@ public class TagsController {
     public Tags getById(@PathVariable Long id) {
         Tags tag = tagsService.getById(id);
         if (tag == null) {
-            throw new IllegalArgumentException("标签不存在");
+            throw new BusinessException("标签不存在");
         }
         return tag;
     }

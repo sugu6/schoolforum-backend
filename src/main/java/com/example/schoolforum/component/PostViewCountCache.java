@@ -4,6 +4,8 @@ import com.example.schoolforum.constant.RedisCacheKey;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
@@ -143,7 +145,15 @@ public class PostViewCountCache {
     }
 
     public Set<String> getAllViewCountKeys() {
-        return redisTemplate.keys(RedisCacheKey.POST_VIEW_COUNT + "*");
+        Set<String> keys = new HashSet<>();
+        String pattern = RedisCacheKey.POST_VIEW_COUNT + "*";
+        ScanOptions scanOptions = ScanOptions.scanOptions().match(pattern).count(100).build();
+        try (Cursor<String> cursor = redisTemplate.scan(scanOptions)) {
+            while (cursor.hasNext()) {
+                keys.add(cursor.next());
+            }
+        }
+        return keys;
     }
 
     public void deleteViewCountKeys(Set<String> keys) {

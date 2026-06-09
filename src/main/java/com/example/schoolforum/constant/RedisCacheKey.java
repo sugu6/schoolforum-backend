@@ -19,6 +19,9 @@ public final class RedisCacheKey {
     public static final String CATEGORIES = "posts:categories";
     public static final String USER_INFO = "user:info:";
 
+    public static final String CAPTCHA_RATE_LIMIT = "captcha:rate_limit:";
+    public static final String CAPTCHA_ERROR_COUNT = "captcha:error_count:";
+
     public static final long HOT_POSTS_TTL = 300;
     public static final long HOT_RANK_ZSET_TTL = 600;
     public static final long LATEST_POSTS_TTL = 300;

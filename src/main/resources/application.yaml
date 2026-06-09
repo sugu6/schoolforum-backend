@@ -14,15 +14,16 @@ mybatis-flex:
     log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
 
 sa-token:
-  token-name: satoken
+  token-name: Authorization
+  token-prefix: Bearer
   timeout: 604800
   active-timeout: -1
   is-concurrent: true
   is-share: true
   is-log: false
   is-read-header: true
-  is-read-cookie: true
-  jwt-secret-key: ${JWT_SECRET_KEY:schoolforum-sa-token-jwt-secret-key-2026}
+  is-read-cookie: false
+  jwt-secret-key: ${JWT_SECRET_KEY:schoolforum-dev-jwt-secret-key-do-not-use-in-production}
 
 springdoc:
   swagger-ui:

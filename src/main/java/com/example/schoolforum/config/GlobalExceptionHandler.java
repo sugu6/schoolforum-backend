@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @Slf4j
 @RestControllerAdvice
@@ -64,7 +65,7 @@ public class GlobalExceptionHandler {
         if (isSseRequest(request)) {
             return null;
         }
-        return Result.error("权限不足，缺少权限: " + permission);
+        return Result.error("权限不足");
     }
 
     @ExceptionHandler(NotRoleException.class)
@@ -74,21 +75,23 @@ public class GlobalExceptionHandler {
         if (isSseRequest(request)) {
             return null;
         }
-        return Result.error("角色权限不足，缺少角色: " + role);
+        return Result.error("权限不足");
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public Result<Void> handleNoResourceFoundException(NoResourceFoundException e, HttpServletRequest request) {
+        log.debug("资源未找到: {}", request.getRequestURI());
+        return Result.error(404, "资源未找到");
     }
 
     @ExceptionHandler(Exception.class)
     public Result<Void> handleException(Exception e, HttpServletRequest request) {
-        log.error("系统异常: {}", e.getMessage(), e);
+        log.error("未预期的异常: URI={}", request.getRequestURI(), e);
         if (isSseRequest(request)) {
             log.warn("SSE 请求中发生系统异常，无法返回错误响应");
             return null;
         }
-        String message = e.getMessage();
-        if (message == null || message.isEmpty()) {
-            message = "系统繁忙，请稍后重试";
-        }
-        return Result.error(message);
+        return Result.error("系统繁忙，请稍后重试");
     }
 
     private boolean isSseRequest(HttpServletRequest request) {

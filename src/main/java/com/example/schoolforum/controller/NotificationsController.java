@@ -50,6 +50,7 @@ public class NotificationsController {
     public Page<Notifications> page(
             @Parameter(description = "页码，默认第1页") @RequestParam(defaultValue = "1") int pageNumber,
             @Parameter(description = "每页数量，默认10条") @RequestParam(defaultValue = "10") int pageSize) {
+        if (pageSize > 100) pageSize = 100;
         Long userId = PermissionUtil.getCurrentUserId();
         return notificationsService.list(userId, pageNumber, pageSize);
     }

@@ -27,6 +27,8 @@ public class SearchController {
             @Parameter(description = "搜索关键词", required = true) @RequestParam String query,
             @Parameter(description = "页码，默认第1页") @RequestParam(defaultValue = "1") int page,
             @Parameter(description = "每页数量，默认10条") @RequestParam(defaultValue = "10") int size) {
+        if (size > 100) size = 100;
+        if (query.length() > 200) query = query.substring(0, 200);
         return searchService.search(query, page, size);
     }
 
@@ -35,6 +37,7 @@ public class SearchController {
     public List<KeywordSuggestion> suggest(
             @Parameter(description = "输入前缀", required = true) @RequestParam String prefix,
             @Parameter(description = "返回数量，默认8条") @RequestParam(defaultValue = "8") int limit) {
+        if (prefix.length() > 200) prefix = prefix.substring(0, 200);
         return searchService.getKeywordSuggestions(prefix, limit);
     }
 

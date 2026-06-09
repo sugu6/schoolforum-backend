@@ -20,6 +20,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
 @Component
@@ -29,6 +30,8 @@ public class SearchAnalyticsInterceptor implements HandlerInterceptor {
     private final IndexApi indexApi;
     private final SearchApi searchApi;
     private final UtilsApi utilsApi;
+
+    private final AtomicBoolean indexEnsured = new AtomicBoolean(false);
 
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
@@ -71,6 +74,7 @@ public class SearchAnalyticsInterceptor implements HandlerInterceptor {
                 Object idObj = hit.get("_id");
                 Long docId = idObj instanceof Number ? ((Number) idObj).longValue() : Long.parseLong(idObj.toString());
 
+                @SuppressWarnings("unchecked")
                 Map<String, Object> source = hit.get("_source") instanceof Map
                         ? (Map<String, Object>) hit.get("_source")
                         : new HashMap<>();
@@ -96,6 +100,9 @@ public class SearchAnalyticsInterceptor implements HandlerInterceptor {
     }
 
     private void ensurePopularQueriesIndex() throws ApiException {
+        if (indexEnsured.get()) {
+            return;
+        }
         try {
             SearchRequest testRequest = new SearchRequest();
             testRequest.setIndex(PopularQueryDocument.INDEX_NAME);
@@ -104,10 +111,12 @@ public class SearchAnalyticsInterceptor implements HandlerInterceptor {
             testRequest.setQuery(queryMap);
             testRequest.setLimit(0);
             searchApi.search(testRequest);
+            indexEnsured.set(true);
         } catch (ApiException e) {
             if (e.getCode() == 404) {
                 utilsApi.sql(SearchServiceImpl.POPULAR_QUERIES_DDL, true);
                 log.info("Created popular_queries index with Chinese+English charset, ICU morphology and min_prefix_len=1");
+                indexEnsured.set(true);
             } else {
                 throw e;
             }

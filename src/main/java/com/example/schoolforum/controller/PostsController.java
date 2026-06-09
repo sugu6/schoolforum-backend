@@ -3,6 +3,7 @@ package com.example.schoolforum.controller;
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckRole;
 import cn.dev33.satoken.annotation.SaMode;
+import com.example.schoolforum.exception.BusinessException;
 import com.example.schoolforum.pojo.Posts;
 import com.example.schoolforum.service.PostsService;
 import com.example.schoolforum.util.PermissionUtil;
@@ -13,11 +14,14 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Collections;
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/posts")
 @RequiredArgsConstructor
@@ -32,11 +36,14 @@ public class PostsController {
     @Operation(summary = "新增帖子")
     public Posts add(
             @Parameter(description = "帖子标题") @RequestParam @NotBlank(message = "标题不能为空") @Size(max = 200, message = "标题长度不能超过200个字符") String title,
-            @Parameter(description = "帖子内容（Markdown格式）") @RequestParam @NotBlank(message = "内容不能为空") String content,
+            @Parameter(description = "帖子内容（Markdown格式）") @RequestParam @NotBlank(message = "内容不能为空") @Size(max = 50000, message = "内容长度不能超过50000个字符") String content,
             @Parameter(description = "标签ID列表") @RequestParam(required = false) List<Long> tagIds,
             @Parameter(description = "分类ID") @RequestParam(required = false) Long categoryId,
             @Parameter(description = "封面图片URL") @RequestParam(required = false) @Size(max = 500, message = "封面URL长度不能超过500个字符") String coverImage) {
         Long userId = PermissionUtil.getCurrentUserId();
+        if (coverImage != null && !coverImage.isBlank() && !coverImage.startsWith("http://") && !coverImage.startsWith("https://")) {
+            throw new BusinessException("封面图片URL必须以http://或https://开头");
+        }
         return postsService.createPost(userId, title, content, tagIds, categoryId, coverImage);
     }
 
@@ -46,11 +53,14 @@ public class PostsController {
     public Posts update(
             @PathVariable Long id,
             @Parameter(description = "帖子标题") @RequestParam(required = false) @Size(max = 200, message = "标题长度不能超过200个字符") String title,
-            @Parameter(description = "帖子内容") @RequestParam(required = false) String content,
+            @Parameter(description = "帖子内容") @RequestParam(required = false) @Size(max = 50000, message = "内容长度不能超过50000个字符") String content,
             @Parameter(description = "标签ID列表") @RequestParam(required = false) List<Long> tagIds,
             @Parameter(description = "分类ID") @RequestParam(required = false) Long categoryId,
             @Parameter(description = "封面图片URL") @RequestParam(required = false) @Size(max = 500, message = "封面URL长度不能超过500个字符") String coverImage) {
         Long userId = PermissionUtil.getCurrentUserId();
+        if (coverImage != null && !coverImage.isBlank() && !coverImage.startsWith("http://") && !coverImage.startsWith("https://")) {
+            throw new BusinessException("封面图片URL必须以http://或https://开头");
+        }
         return postsService.updatePost(id, title, content, tagIds, categoryId, coverImage, userId);
     }
 
@@ -78,6 +88,7 @@ public class PostsController {
             @RequestParam(defaultValue = "1") int pageNumber,
             @RequestParam(defaultValue = "10") int pageSize,
             @Parameter(description = "分类ID，不传则查询所有，支持一级分类自动包含子分类") @RequestParam(required = false) Long categoryId) {
+        if (pageSize > 100) pageSize = 100;
         return postsService.listByCategory(categoryId, pageNumber, pageSize);
     }
 
@@ -90,6 +101,7 @@ public class PostsController {
             @RequestParam(defaultValue = "latest") String sort,
             @Parameter(description = "分类ID，不传则查询所有，支持一级分类自动包含子分类") 
             @RequestParam(required = false) Long categoryId) {
+        if (pageSize > 100) pageSize = 100;
         return switch (sort.toLowerCase()) {
             case "hot" -> postsService.getHotListPage(pageNumber, pageSize, categoryId);
             case "essential" -> postsService.listEssential(pageNumber, pageSize, categoryId);
@@ -129,6 +141,7 @@ public class PostsController {
     public Page<Posts> listMyPosts(
             @Parameter(description = "页码，默认第1页") @RequestParam(defaultValue = "1") int pageNumber,
             @Parameter(description = "每页数量，默认10条") @RequestParam(defaultValue = "10") int pageSize) {
+        if (pageSize > 100) pageSize = 100;
         Long userId = PermissionUtil.getCurrentUserId();
         return postsService.listByAuthor(userId, pageNumber, pageSize);
     }
@@ -139,6 +152,7 @@ public class PostsController {
             @Parameter(description = "用户ID") @PathVariable Long userId,
             @Parameter(description = "页码，默认第1页") @RequestParam(defaultValue = "1") int pageNumber,
             @Parameter(description = "每页数量，默认10条") @RequestParam(defaultValue = "10") int pageSize) {
+        if (pageSize > 100) pageSize = 100;
         return postsService.listByAuthor(userId, pageNumber, pageSize);
     }
 
@@ -147,6 +161,11 @@ public class PostsController {
     public List<Posts> getRelatedPosts(
             @Parameter(description = "帖子ID") @PathVariable Long id,
             @Parameter(description = "返回数量，默认5条") @RequestParam(defaultValue = "5") int limit) {
-        return postsService.getRelatedPosts(id, limit);
+        try {
+            return postsService.getRelatedPosts(id, limit);
+        } catch (Exception e) {
+            log.error("获取相关帖子失败: postId={}", id, e);
+            return Collections.emptyList();
+        }
     }
 }

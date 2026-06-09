@@ -13,6 +13,7 @@ import com.example.schoolforum.service.NotificationsService;
 import com.example.schoolforum.util.PermissionUtil;
 import com.example.schoolforum.util.SseEmitterManager;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -26,6 +27,7 @@ import static com.example.schoolforum.pojo.table.NotificationsTableDef.NOTIFICAT
  * @author sugu
  * @since 2026-03-06
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class NotificationsServiceImpl extends ServiceImpl<NotificationsMapper, Notifications> implements NotificationsService {
@@ -78,13 +80,31 @@ public class NotificationsServiceImpl extends ServiceImpl<NotificationsMapper, N
 
     @Override
     public void createNotification(Long userId, String type, String title, String content, Long relatedId, String relatedType, Long senderId) {
+        NotificationType notificationType;
+        try {
+            notificationType = NotificationType.valueOf(type);
+        } catch (IllegalArgumentException e) {
+            log.warn("无效的通知类型: {}", type);
+            return;
+        }
+
+        RelatedType notificationRelatedType = null;
+        if (relatedType != null) {
+            try {
+                notificationRelatedType = RelatedType.valueOf(relatedType);
+            } catch (IllegalArgumentException e) {
+                log.warn("无效的关联类型: {}", relatedType);
+                return;
+            }
+        }
+
         Notifications notification = Notifications.builder()
                 .userId(userId)
-                .type(NotificationType.valueOf(type))
+                .type(notificationType)
                 .title(title)
                 .content(content)
                 .relatedId(relatedId)
-                .relatedType(relatedType != null ? RelatedType.valueOf(relatedType) : null)
+                .relatedType(notificationRelatedType)
                 .senderId(senderId)
                 .isRead(ReadStatus.UNREAD)
                 .createdAt(LocalDateTime.now())

@@ -47,13 +47,16 @@ public class OAuthController {
 
     private static final String OAUTH_TEMP_KEY_PREFIX = "oauth:temp:";
     private static final String BIND_STATE_PREFIX = "bind:";
+    private static final String OAUTH_STATE_PREFIX = "oauth:state:";
     private static final long OAUTH_TEMP_EXPIRE_TIME = 10;
 
     @GetMapping("/render/github")
     @Operation(summary = "GitHub授权页面", description = "跳转到GitHub授权页面（用于登录）")
     public void renderGithubAuth(HttpServletResponse response) throws IOException {
         AuthRequest authRequest = getGithubAuthRequest();
-        response.sendRedirect(authRequest.authorize(AuthStateUtils.createState()));
+        String state = UUID.randomUUID().toString().replace("-", "");
+        redisTemplate.opsForValue().set(OAUTH_STATE_PREFIX + state, "1", 10, TimeUnit.MINUTES);
+        response.sendRedirect(authRequest.authorize(state));
     }
 
     @GetMapping("/bind/github")
@@ -69,7 +72,9 @@ public class OAuthController {
         }
         
         AuthRequest authRequest = getGithubAuthRequest();
-        String state = BIND_STATE_PREFIX + userId + "_" + UUID.randomUUID().toString().replace("-", "");
+        String rawState = UUID.randomUUID().toString().replace("-", "");
+        String state = BIND_STATE_PREFIX + rawState;
+        redisTemplate.opsForValue().set(OAUTH_STATE_PREFIX + state, String.valueOf(userId), 10, TimeUnit.MINUTES);
         response.sendRedirect(authRequest.authorize(state));
     }
 
@@ -78,6 +83,30 @@ public class OAuthController {
     public OAuthCallbackResult githubCallback(
             AuthCallback callback,
             @Parameter(description = "状态参数，用于区分登录和绑定") @RequestParam(required = false) String state) {
+        
+        // state 非空校验
+        if (state == null || state.isEmpty()) {
+            throw new BusinessException("缺少授权状态参数，请重新登录");
+        }
+
+        // Validate state for login flow (bind flow has its own state format)
+        if (!state.startsWith(BIND_STATE_PREFIX)) {
+            String stateKey = OAUTH_STATE_PREFIX + state;
+            String stateValue = (String) redisTemplate.opsForValue().get(stateKey);
+            if (stateValue == null) {
+                throw new BusinessException("无效的授权状态，请重新登录");
+            }
+            redisTemplate.delete(stateKey);
+        }
+
+        // Validate state for bind flow (不删除，交给 handleGithubBind 处理)
+        if (state.startsWith(BIND_STATE_PREFIX)) {
+            String stateKey = OAUTH_STATE_PREFIX + state;
+            String stateValue = (String) redisTemplate.opsForValue().get(stateKey);
+            if (stateValue == null) {
+                throw new BusinessException("无效的绑定状态，请重新绑定");
+            }
+        }
         
         AuthRequest authRequest = getGithubAuthRequest();
         AuthResponse<AuthUser> response = authRequest.login(callback);
@@ -98,7 +127,14 @@ public class OAuthController {
     public OAuthCallbackResult confirmUsername(
             @Parameter(description = "临时标识key") @RequestParam String tempKey,
             @Parameter(description = "用户选择的用户名") @RequestParam String username) {
-        
+
+        if (username == null || username.length() < 2 || username.length() > 30) {
+            throw new BusinessException("用户名长度必须在2-30个字符之间");
+        }
+        if (!username.matches("^[a-zA-Z0-9_\\u4e00-\\u9fa5]+$")) {
+            throw new BusinessException("用户名只能包含字母、数字、下划线和中文");
+        }
+
         String redisKey = OAUTH_TEMP_KEY_PREFIX + tempKey;
         String tempData = redisTemplate.opsForValue().get(redisKey);
         
@@ -122,18 +158,9 @@ public class OAuthController {
             
             redisTemplate.delete(redisKey);
             
-            StpUtil.login(user.getId());
-            if (user.getRole() != null) {
-                StpUtil.getSession().set("roles",
-                        Collections.singletonList(user.getRole().name().toLowerCase()));
-            }
-            String token = StpUtil.getTokenValue();
-            user.setPassword(null);
-            usersService.cacheUserInfo(user);
-            
             log.info("GitHub用户确认用户名并注册成功: githubId={}, username={}", tempUser.githubId(), username);
             
-            return OAuthCallbackResult.success(user, token);
+            return loginAndReturnResult(user);
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
@@ -158,21 +185,25 @@ public class OAuthController {
         log.info("用户解绑GitHub成功: userId={}", userId);
     }
 
+    private OAuthCallbackResult loginAndReturnResult(Users user) {
+        StpUtil.login(user.getId());
+        if (user.getRole() != null) {
+            StpUtil.getSession().set("roles",
+                    Collections.singletonList(user.getRole().name().toLowerCase()));
+        }
+        String token = StpUtil.getTokenValue();
+        user.setPassword(null);
+        usersService.cacheUserInfo(user);
+        return OAuthCallbackResult.success(user, token);
+    }
+
     private OAuthCallbackResult handleGithubLogin(AuthUser authUser) {
         String githubId = authUser.getUuid();
         Users user = usersService.getByGithubId(githubId);
 
         if (user != null) {
             user = usersService.updateGithubUser(user, authUser.getAvatar());
-            StpUtil.login(user.getId());
-            if (user.getRole() != null) {
-                StpUtil.getSession().set("roles",
-                        Collections.singletonList(user.getRole().name().toLowerCase()));
-            }
-            String token = StpUtil.getTokenValue();
-            user.setPassword(null);
-            usersService.cacheUserInfo(user);
-            return OAuthCallbackResult.success(user, token);
+            return loginAndReturnResult(user);
         }
 
         String baseUsername = authUser.getUsername();
@@ -182,15 +213,7 @@ public class OAuthController {
         
         if (usersService.getByUsername(baseUsername) == null) {
             user = usersService.createGithubUser(githubId, baseUsername, authUser.getEmail(), authUser.getAvatar());
-            StpUtil.login(user.getId());
-            if (user.getRole() != null) {
-                StpUtil.getSession().set("roles",
-                        Collections.singletonList(user.getRole().name().toLowerCase()));
-            }
-            String token = StpUtil.getTokenValue();
-            user.setPassword(null);
-            usersService.cacheUserInfo(user);
-            return OAuthCallbackResult.success(user, token);
+            return loginAndReturnResult(user);
         }
 
         String tempKey = UUID.randomUUID().toString().replace("-", "");
@@ -225,15 +248,12 @@ public class OAuthController {
     }
 
     private OAuthCallbackResult handleGithubBind(AuthUser authUser, String state) {
-        String stateContent = state.substring(BIND_STATE_PREFIX.length());
-        String[] parts = stateContent.split("_");
-        if (parts.length < 1) {
-            throw new BusinessException("无效的绑定请求");
-        }
-        
+        String stateKey = OAUTH_STATE_PREFIX + state;
+        String userIdStr = (String) redisTemplate.opsForValue().getAndDelete(stateKey);
+
         Long userId;
         try {
-            userId = Long.parseLong(parts[0]);
+            userId = Long.parseLong(userIdStr);
         } catch (NumberFormatException e) {
             throw new BusinessException("无效的绑定请求");
         }

@@ -15,7 +15,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -61,6 +60,7 @@ public class FollowsController {
     public Page<Follows> listPageFollowing(
             @RequestParam(defaultValue = "1") int pageNumber,
             @RequestParam(defaultValue = "10") int pageSize) {
+        if (pageSize > 100) pageSize = 100;
         return followsService.listPageFollowing(pageNumber, pageSize);
     }
 
@@ -70,11 +70,13 @@ public class FollowsController {
             @Parameter(description = "用户ID") @PathVariable Long userId,
             @Parameter(description = "页码，默认第1页") @RequestParam(defaultValue = "1") int pageNumber,
             @Parameter(description = "每页数量，默认10条") @RequestParam(defaultValue = "10") int pageSize) {
-        Page<Users> page = followsService.listFollowing(userId, pageNumber, pageSize);
+        if (pageSize > 100) pageSize = 100;
         if (!checkPrivacyPermission(userId, "following")) {
-            page.setRecords(List.of());
+            Page<Users> emptyPage = new Page<>(pageNumber, pageSize);
+            emptyPage.setTotalRow(0);
+            return emptyPage;
         }
-        return page;
+        return followsService.listFollowing(userId, pageNumber, pageSize);
     }
 
     @GetMapping("/followers/list/page")
@@ -83,6 +85,7 @@ public class FollowsController {
     public Page<Follows> listPageFollowers(
             @RequestParam(defaultValue = "1") int pageNumber,
             @RequestParam(defaultValue = "10") int pageSize) {
+        if (pageSize > 100) pageSize = 100;
         return followsService.listPageFollowers(pageNumber, pageSize);
     }
 
@@ -92,11 +95,13 @@ public class FollowsController {
             @Parameter(description = "用户ID") @PathVariable Long userId,
             @Parameter(description = "页码，默认第1页") @RequestParam(defaultValue = "1") int pageNumber,
             @Parameter(description = "每页数量，默认10条") @RequestParam(defaultValue = "10") int pageSize) {
-        Page<Users> page = followsService.listFollowers(userId, pageNumber, pageSize);
+        if (pageSize > 100) pageSize = 100;
         if (!checkPrivacyPermission(userId, "followers")) {
-            page.setRecords(List.of());
+            Page<Users> emptyPage = new Page<>(pageNumber, pageSize);
+            emptyPage.setTotalRow(0);
+            return emptyPage;
         }
-        return page;
+        return followsService.listFollowers(userId, pageNumber, pageSize);
     }
 
     private boolean checkPrivacyPermission(Long userId, String type) {
@@ -108,12 +113,9 @@ public class FollowsController {
         if (targetUser == null) {
             return true;
         }
-        if ("following".equals(type) && Boolean.FALSE.equals(targetUser.getShowFollowing())) {
-            return false;
+        if ("following".equals(type)) {
+            return !Boolean.FALSE.equals(targetUser.getShowFollowing());
         }
-        if ("followers".equals(type) && Boolean.FALSE.equals(targetUser.getShowFollowers())) {
-            return false;
-        }
-        return true;
+        return !Boolean.FALSE.equals(targetUser.getShowFollowers());
     }
 }

@@ -31,10 +31,11 @@ public class WebSocketConfig implements WebSocketConfigurer {
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(privateMessageWebSocketHandler, "/ws/message")
                 .addInterceptors(webSocketAuthInterceptor)
-                .setAllowedOrigins("*");
+                .setAllowedOrigins("https://schoolforum.sugu6.top", "http://localhost:5173", "http://localhost:3000", "http://localhost:8080");
 
         registry.addHandler(postStatsWebSocketHandler, "/ws/post-stats")
-                .setAllowedOrigins("*");
+                .addInterceptors(webSocketAuthInterceptor)
+                .setAllowedOrigins("https://schoolforum.sugu6.top", "http://localhost:5173", "http://localhost:3000", "http://localhost:8080");
     }
 
     /**

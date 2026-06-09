@@ -18,6 +18,7 @@ import com.mybatisflex.core.util.UpdateEntity;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -77,7 +78,11 @@ public class SignServiceImpl extends ServiceImpl<SignRecordMapper, SignRecord> i
                 .isRepair(false)
                 .createdAt(LocalDateTime.now())
                 .build();
-        signRecordMapper.insert(signRecord);
+        try {
+            signRecordMapper.insert(signRecord);
+        } catch (DuplicateKeyException e) {
+            throw new BusinessException("今日已签到");
+        }
 
         log.info("签到调试 - 准备更新用户: expGained={}, pointsGained={}, continuousDays={}",
                 expGained, pointsGained, continuousDays);
@@ -255,20 +260,18 @@ public class SignServiceImpl extends ServiceImpl<SignRecordMapper, SignRecord> i
             throw new BusinessException("用户不存在");
         }
 
-        int currentPoints = user.getPoints() != null ? user.getPoints() : 0;
-        int currentSignCards = user.getSignCards() != null ? user.getSignCards() : 0;
-
-        if (currentPoints < SIGN_CARD_COST) {
+        Users updateUser = UpdateEntity.of(Users.class, userId);
+        UpdateWrapper<Users> wrapper = UpdateWrapper.of(updateUser);
+        wrapper.set(USERS.POINTS, USERS.POINTS.add(-SIGN_CARD_COST));
+        wrapper.set(USERS.SIGN_CARDS, USERS.SIGN_CARDS.add(1));
+        int rows = usersMapper.updateByCondition(updateUser, USERS.ID.eq(userId).and(USERS.POINTS.ge(SIGN_CARD_COST)));
+        if (rows == 0) {
             throw new BusinessException("积分不足，需要" + SIGN_CARD_COST + "积分");
         }
 
-        int newPoints = currentPoints - SIGN_CARD_COST;
-        int newSignCards = currentSignCards + 1;
-
-        Users updateUser = UpdateEntity.of(Users.class, userId);
-        updateUser.setPoints(newPoints);
-        updateUser.setSignCards(newSignCards);
-        usersMapper.update(updateUser);
+        Users updatedUser = usersMapper.selectOneById(userId);
+        int newPoints = updatedUser.getPoints() != null ? updatedUser.getPoints() : 0;
+        int newSignCards = updatedUser.getSignCards() != null ? updatedUser.getSignCards() : 0;
 
         PointsRecord pointsRecord = PointsRecord.builder()
                 .userId(userId)
@@ -412,21 +415,22 @@ public class SignServiceImpl extends ServiceImpl<SignRecordMapper, SignRecord> i
     }
 
     private Integer calculateRepairContinuousDays(Long userId, LocalDate signDate) {
+        // Use a range query to find all sign records from the earliest possible date up to signDate
+        QueryWrapper queryWrapper = QueryWrapper.create()
+                .where(SignRecord::getUserId).eq(userId)
+                .and(SignRecord::getSignDate).le(signDate)
+                .orderBy(SignRecord::getSignDate, false);
+        List<SignRecord> records = signRecordMapper.selectListByQuery(queryWrapper);
+
         int continuousDays = 0;
-        LocalDate checkDate = signDate;
-
-        while (true) {
-            QueryWrapper queryWrapper = QueryWrapper.create()
-                    .where(SignRecord::getUserId).eq(userId)
-                    .and(SignRecord::getSignDate).eq(checkDate);
-            SignRecord record = signRecordMapper.selectOneByQuery(queryWrapper);
-
-            if (record == null) {
+        LocalDate expectedDate = signDate;
+        for (SignRecord record : records) {
+            if (record.getSignDate().equals(expectedDate)) {
+                continuousDays++;
+                expectedDate = expectedDate.minusDays(1);
+            } else if (record.getSignDate().isBefore(expectedDate)) {
                 break;
             }
-
-            continuousDays++;
-            checkDate = checkDate.minusDays(1);
         }
 
         return continuousDays;
@@ -460,21 +464,22 @@ public class SignServiceImpl extends ServiceImpl<SignRecordMapper, SignRecord> i
             return 0;
         }
 
+        // Use a range query instead of N+1 daily queries
+        QueryWrapper queryWrapper = QueryWrapper.create()
+                .where(SignRecord::getUserId).eq(userId)
+                .and(SignRecord::getSignDate).le(lastSignDate)
+                .orderBy(SignRecord::getSignDate, false);
+        List<SignRecord> records = signRecordMapper.selectListByQuery(queryWrapper);
+
         int continuousDays = 0;
-        LocalDate checkDate = lastSignDate;
-
-        while (true) {
-            QueryWrapper queryWrapper = QueryWrapper.create()
-                    .where(SignRecord::getUserId).eq(userId)
-                    .and(SignRecord::getSignDate).eq(checkDate);
-            SignRecord record = signRecordMapper.selectOneByQuery(queryWrapper);
-
-            if (record == null) {
+        LocalDate expectedDate = lastSignDate;
+        for (SignRecord record : records) {
+            if (record.getSignDate().equals(expectedDate)) {
+                continuousDays++;
+                expectedDate = expectedDate.minusDays(1);
+            } else if (record.getSignDate().isBefore(expectedDate)) {
                 break;
             }
-
-            continuousDays++;
-            checkDate = checkDate.minusDays(1);
         }
 
         return continuousDays;

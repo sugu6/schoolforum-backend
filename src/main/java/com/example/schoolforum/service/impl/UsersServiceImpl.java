@@ -29,6 +29,7 @@ import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,10 +39,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -70,12 +72,20 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
 
     private static final long CAPTCHA_EXPIRE_TIME = 5;
     private static final String CAPTCHA_PREFIX = "captcha:";
+    private static final Set<String> ALLOWED_IMAGE_EXTENSIONS = Set.of(".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp");
 
     @Override
     public void sendCaptcha(String email, CodeType codeType) {
+        String rateLimitKey = RedisCacheKey.CAPTCHA_RATE_LIMIT + email;
+        String lastSentTime = (String) redisTemplate.opsForValue().get(rateLimitKey);
+        if (lastSentTime != null) {
+            throw new BusinessException("发送过于频繁，请60秒后再试");
+        }
+
         String captcha = generateCaptcha();
         String redisKey = getRedisKey(email, codeType);
         redisTemplate.opsForValue().set(redisKey, captcha, CAPTCHA_EXPIRE_TIME, TimeUnit.MINUTES);
+        redisTemplate.opsForValue().set(rateLimitKey, "1", 60, TimeUnit.SECONDS);
         sendEmail(email, codeType, captcha);
         log.info("验证码已发送: email={}, type={}", email, codeType.getDesc());
     }
@@ -83,17 +93,30 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     @Override
     public boolean verifyCaptcha(String email, CodeType codeType, String captcha) {
         String redisKey = getRedisKey(email, codeType);
+        String errorCountKey = RedisCacheKey.CAPTCHA_ERROR_COUNT + email;
+        String errorCountStr = (String) redisTemplate.opsForValue().get(errorCountKey);
+        int errorCount = errorCountStr != null ? Integer.parseInt(errorCountStr) : 0;
+        if (errorCount >= 5) {
+            redisTemplate.delete(redisKey);
+            redisTemplate.delete(errorCountKey);
+            return false;
+        }
+
         String storedCaptcha = redisTemplate.opsForValue().get(redisKey);
         if (storedCaptcha != null && storedCaptcha.equals(captcha)) {
             redisTemplate.delete(redisKey);
+            redisTemplate.delete(errorCountKey);
             return true;
         }
+        redisTemplate.opsForValue().set(errorCountKey, String.valueOf(errorCount + 1), 5, TimeUnit.MINUTES);
         return false;
     }
 
     @Override
     @Transactional
     public Users register(String username, String password, String email, Integer age, Gender gender, String captcha) {
+        validatePassword(password);
+
         if (!verifyCaptcha(email, CodeType.REGISTER, captcha)) {
             throw new BusinessException("验证码错误或已过期");
         }
@@ -131,7 +154,11 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         users.setUpdatedAt(LocalDateTime.now());
         users.setLastLoginAt(LocalDateTime.now());
         
-        this.save(users);
+        try {
+            this.save(users);
+        } catch (DuplicateKeyException e) {
+            throw new BusinessException("用户名或邮箱已存在");
+        }
         searchService.indexUser(UserSearchDocument.fromEntity(users));
         
         log.info("用户注册成功: username={}, email={}", username, email);
@@ -212,7 +239,14 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         if (age != null) users.setAge(age);
         if (gender != null) users.setGender(gender);
         if (bio != null) users.setBio(bio);
-        if (role != null && (isSuperAdmin || isAdmin)) users.setRole(role);
+        if (role != null) {
+            if (role == UserRole.SUPER_ADMIN && !isSuperAdmin) {
+                throw new BusinessException("仅超级管理员可设置超级管理员角色");
+            }
+            if (isSuperAdmin || isAdmin) {
+                users.setRole(role);
+            }
+        }
         users.setUpdatedAt(LocalDateTime.now());
         
         this.updateById(users);
@@ -232,9 +266,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
 
     @Override
     public Page<Users> list(int pageNumber, int pageSize) {
-        Page<Users> result = getMapper().paginate(pageNumber, pageSize, QueryWrapper.create());
-        result.getRecords().forEach(u -> u.setPassword(null));
-        return result;
+        return listPage(pageNumber, pageSize);
     }
 
     @Override
@@ -244,9 +276,20 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         return result;
     }
 
+    private void validatePassword(String password) {
+        if (password == null || password.length() < 8) {
+            throw new BusinessException("密码长度不能少于8位");
+        }
+        if (!password.matches(".*[a-zA-Z].*") || !password.matches(".*\\d.*")) {
+            throw new BusinessException("密码必须包含字母和数字");
+        }
+    }
+
     @Override
     @Transactional
     public void changePassword(Long userId, String oldPassword, String newPassword, String captcha) {
+        validatePassword(newPassword);
+
         Users users = this.getById(userId);
         if (users == null) {
             throw new BusinessException("用户不存在");
@@ -275,6 +318,8 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     @Override
     @Transactional
     public void resetPassword(String email, String newPassword, String captcha) {
+        validatePassword(newPassword);
+
         if (!verifyCaptcha(email, CodeType.RESET_PASSWORD, captcha)) {
             throw new BusinessException("验证码错误或已过期");
         }
@@ -314,6 +359,9 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         if (originalFilename != null && originalFilename.contains(".")) {
             extension = originalFilename.substring(originalFilename.lastIndexOf("."));
         }
+        if (!ALLOWED_IMAGE_EXTENSIONS.contains(extension.toLowerCase())) {
+            throw new BusinessException("不支持的图片格式，仅允许: jpg, jpeg, png, gif, webp, bmp");
+        }
         String newFilename = UUID.randomUUID()+ extension;
 
         try {
@@ -332,12 +380,6 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
             }
 
             String oldAvatar = user.getAvatarUrl();
-            if (oldAvatar != null && oldAvatar.contains("/avatars/")) {
-                String oldFilename = oldAvatar.substring(oldAvatar.lastIndexOf("/") + 1);
-                Path oldFilePath = uploadPath.resolve(oldFilename);
-                Files.deleteIfExists(oldFilePath);
-            }
-
             String avatarUrl = "/avatars/" + newFilename;
             
             Users update = UpdateEntity.of(Users.class, userId);
@@ -345,6 +387,13 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
             update.setUpdatedAt(LocalDateTime.now());
             getMapper().update(update);
             evictUserCache(userId);
+
+            // Delete old avatar after DB update succeeds
+            if (oldAvatar != null && oldAvatar.contains("/avatars/")) {
+                String oldFilename = oldAvatar.substring(oldAvatar.lastIndexOf("/") + 1);
+                Path oldFilePath = uploadPath.resolve(oldFilename);
+                Files.deleteIfExists(oldFilePath);
+            }
 
             log.info("头像上传成功: userId={}, avatarUrl={}", userId, avatarUrl);
             return avatarUrl;
@@ -356,7 +405,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     }
 
     private String generateCaptcha() {
-        Random random = new Random();
+        SecureRandom random = new SecureRandom();
         StringBuilder captcha = new StringBuilder();
         for (int i = 0; i < 6; i++) {
             captcha.append(random.nextInt(10));
@@ -374,7 +423,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
             helper.setFrom(mailUsername, "校园论坛");
             helper.setTo(to);
-            helper.setSubject(codeType.getDesc() + "验证码：" + captcha);
+            helper.setSubject("校园论坛 - " + codeType.getDesc() + "验证码");
             helper.setText(buildEmailTextContent(codeType, captcha), buildEmailHtmlContent(codeType, captcha));
             mailSender.send(message);
         } catch (MessagingException | java.io.UnsupportedEncodingException e) {
@@ -478,7 +527,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     }
 
     private String generateRandomPassword() {
-        Random random = new Random();
+        SecureRandom random = new SecureRandom();
         StringBuilder password = new StringBuilder();
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         for (int i = 0; i < 16; i++) {
@@ -493,11 +542,21 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         }
         String username = baseUsername;
         int suffix = 1;
-        while (getMapper().selectOneByQuery(
-            QueryWrapper.create().where(Users::getUsername).eq(username)
-        ) != null) {
+        int maxRetries = 10;
+        while (maxRetries > 0) {
+            try {
+                Users existing = getMapper().selectOneByQuery(
+                    QueryWrapper.create().where(Users::getUsername).eq(username)
+                );
+                if (existing == null) {
+                    return username;
+                }
+            } catch (DuplicateKeyException e) {
+                // 并发冲突，重试
+            }
             username = baseUsername + "_" + suffix;
             suffix++;
+            maxRetries--;
         }
         return username;
     }

@@ -13,6 +13,7 @@ import com.example.schoolforum.mapper.FavoritesMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,19 +45,17 @@ public class FavoritesServiceImpl extends ServiceImpl<FavoritesMapper, Favorites
             throw new BusinessException("帖子不存在");
         }
 
-        QueryWrapper checkWrapper = QueryWrapper.create()
-                .where(Favorites::getUserId).eq(userId)
-                .and(Favorites::getPostId).eq(postId);
-        if (getMapper().selectCountByQuery(checkWrapper) > 0) {
-            throw new BusinessException("已收藏该帖子");
-        }
-
         Favorites favorite = Favorites.builder()
                 .userId(userId)
                 .postId(postId)
                 .createdAt(LocalDateTime.now())
                 .build();
-        this.save(favorite);
+        try {
+            this.save(favorite);
+        } catch (DuplicateKeyException e) {
+            // 已收藏，幂等处理
+            return favorite;
+        }
 
         eventPublisher.publishEvent(new PostStatsUpdateEvent(postId, PostStatsUpdateEvent.StatsType.FAVORITE_ADD));
 

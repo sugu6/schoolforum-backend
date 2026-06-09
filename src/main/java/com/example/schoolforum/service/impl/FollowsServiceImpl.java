@@ -13,6 +13,7 @@ import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.example.schoolforum.mapper.FollowsMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,33 +50,30 @@ public class FollowsServiceImpl extends ServiceImpl<FollowsMapper, Follows> impl
             throw new BusinessException("用户不存在");
         }
 
-        QueryWrapper checkWrapper = QueryWrapper.create()
-                .where(FOLLOWS.FOLLOWER_ID.eq(followerId))
-                .and(FOLLOWS.FOLLOWING_ID.eq(followingId));
-        if (getMapper().selectCountByQuery(checkWrapper) > 0) {
-            throw new BusinessException("已关注该用户");
-        }
-
         Follows follow = Follows.builder()
                 .followerId(followerId)
                 .followingId(followingId)
                 .createdAt(LocalDateTime.now())
                 .build();
-        this.save(follow);
+        try {
+            mapper.insert(follow);
 
-        log.info("用户关注: followerId={}, followingId={}", followerId, followingId);
-        
-        Users follower = usersService.getCachedUserById(followerId);
-        String username = follower != null ? follower.getUsername() : "用户";
-        notificationsService.createNotification(
-                followingId,
-                "FOLLOW",
-                username + "关注了你",
-                username + "关注了你",
-                followerId,
-                null,
-                followerId
-        );
+            log.info("用户关注: followerId={}, followingId={}", followerId, followingId);
+
+            Users follower = usersService.getCachedUserById(followerId);
+            String username = follower != null ? follower.getUsername() : "用户";
+            notificationsService.createNotification(
+                    followingId,
+                    "FOLLOW",
+                    username + "关注了你",
+                    username + "关注了你",
+                    followerId,
+                    null,
+                    followerId
+            );
+        } catch (DuplicateKeyException e) {
+            // 已关注，幂等处理，不发送通知
+        }
         
         return follow;
     }
@@ -91,18 +89,6 @@ public class FollowsServiceImpl extends ServiceImpl<FollowsMapper, Follows> impl
             throw new BusinessException("未关注该用户");
         }
         log.info("用户取消关注: followerId={}, followingId={}", followerId, followingId);
-        
-        Users follower = usersService.getCachedUserById(followerId);
-        String username = follower != null ? follower.getUsername() : "用户";
-        notificationsService.createNotification(
-                followingId,
-                "UNFOLLOW",
-                username + "取消关注了你",
-                username + "取消关注了你",
-                followerId,
-                null,
-                followerId
-        );
     }
 
     @Override
@@ -197,9 +183,6 @@ public class FollowsServiceImpl extends ServiceImpl<FollowsMapper, Follows> impl
 
     @Override
     public Page<Follows> listPageFollowers(int pageNumber, int pageSize) {
-        QueryWrapper wrapper = QueryWrapper.create()
-                .from("follows").as("f")
-                .orderBy("f.created_at", false);
-        return mapper.paginate(pageNumber, pageSize, wrapper);
+        return listPageFollowing(pageNumber, pageSize);
     }
 }

@@ -56,6 +56,9 @@ public class UsersController {
 
         String targetEmail = email;
         if (codeType == CodeType.CHANGE_PASSWORD) {
+            if (!StpUtil.isLogin()) {
+                throw new BusinessException("修改密码需要先登录");
+            }
             Long userId = PermissionUtil.getCurrentUserId();
             Users user = usersService.getById(userId);
             if (user == null) {
@@ -88,7 +91,7 @@ public class UsersController {
         users.setAge(age);
         users.setGender(userGender);
         users.setRole(UserRole.USER);
-        users.setIsActive(ActiveStatus.INACTIVE);
+        users.setIsActive(ActiveStatus.ACTIVE);
         users.setShowFollowing(false);
         users.setShowFollowers(false);
         users.setLevel(1);
@@ -137,6 +140,10 @@ public class UsersController {
         boolean isAdmin = PermissionUtil.isAdmin();
         Long targetId = ((isSuperAdmin || isAdmin) && id != null) ? id : currentUserId;
 
+        if (bio != null && bio.length() > 500) {
+            throw new BusinessException("个人简介长度不能超过500个字符");
+        }
+
         return usersService.updateUser(targetId, username, password, email, age, userGender, bio, userRole, isAdmin, isSuperAdmin);
     }
 
@@ -146,6 +153,7 @@ public class UsersController {
     public Page<Users> listPage(
             @Parameter(description = "页码，默认第1页") @RequestParam(defaultValue = "1") Integer pageNumber,
             @Parameter(description = "每页数量，默认10条") @RequestParam(defaultValue = "10") Integer pageSize) {
+        if (pageSize > 100) pageSize = 100;
         Page<Users> page = usersService.listPage(pageNumber, pageSize);
         page.getRecords().forEach(u -> u.setPassword(null));
         return page;
@@ -158,6 +166,9 @@ public class UsersController {
         if (users == null) {
             throw new BusinessException("用户不存在");
         }
+        users.setPassword(null);
+        users.setEmail(null);
+        users.setGithubId(null);
         return users;
     }
 
@@ -166,8 +177,13 @@ public class UsersController {
     public Page<Users> list(
             @Parameter(description = "页码，默认第1页") @RequestParam(defaultValue = "1") Integer pageNumber,
             @Parameter(description = "每页数量，默认10条") @RequestParam(defaultValue = "10") Integer pageSize) {
+        if (pageSize > 100) pageSize = 100;
         Page<Users> page = usersService.list(pageNumber, pageSize);
-        page.getRecords().forEach(u -> u.setPassword(null));
+        page.getRecords().forEach(u -> {
+            u.setPassword(null);
+            u.setEmail(null);
+            u.setGithubId(null);
+        });
         return page;
     }
 
@@ -234,6 +250,25 @@ public class UsersController {
             @Parameter(description = "验证码", required = true) @RequestParam String captcha) {
         usersService.resetPassword(email, newPassword, captcha);
         return "密码重置成功";
+    }
+
+    @PostMapping("verifyCaptcha")
+    @Operation(summary = "验证验证码", description = "验证邮箱验证码是否正确，用于找回密码等流程")
+    public String verifyCaptcha(
+            @Parameter(description = "邮箱地址", required = true) @RequestParam String email,
+            @Parameter(description = "验证码", required = true) @RequestParam String code,
+            @Parameter(description = "验证码类型", required = true) @RequestParam String type) {
+        CodeType codeType = switch (type) {
+            case "register" -> CodeType.REGISTER;
+            case "changePassword" -> CodeType.CHANGE_PASSWORD;
+            case "resetPassword" -> CodeType.RESET_PASSWORD;
+            default -> throw new BusinessException("无效的验证码类型");
+        };
+        boolean valid = usersService.verifyCaptcha(email, codeType, code);
+        if (valid) {
+            return "验证成功";
+        }
+        throw new BusinessException("验证码错误或已过期");
     }
 
     @PostMapping("avatar")

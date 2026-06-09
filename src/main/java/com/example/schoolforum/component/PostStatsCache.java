@@ -4,6 +4,7 @@ import com.example.schoolforum.constant.RedisCacheKey;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -16,6 +17,16 @@ public class PostStatsCache {
 
     private final StringRedisTemplate redisTemplate;
     private final PostViewCountCache viewCountCache;
+
+    private static final String DECREMENT_SCRIPT =
+            "local val = redis.call('GET', KEYS[1]); " +
+            "if val and tonumber(val) > 0 then " +
+            "  return redis.call('DECR', KEYS[1]); " +
+            "else " +
+            "  return 0; " +
+            "end";
+
+    private static final DefaultRedisScript<Long> DECREMENT_REDIS_SCRIPT = new DefaultRedisScript<>(DECREMENT_SCRIPT, Long.class);
 
     private enum StatsType {
         LIKE(
@@ -78,7 +89,7 @@ public class PostStatsCache {
 
     private void decrementCount(Long postId, StatsType type) {
         String key = type.getKey(postId);
-        redisTemplate.opsForValue().decrement(key);
+        redisTemplate.execute(DECREMENT_REDIS_SCRIPT, Collections.singletonList(key));
         redisTemplate.expire(key, type.getTtl(), TimeUnit.SECONDS);
         log.debug("帖子{}减少: postId={}", type.getDisplayName(), postId);
     }

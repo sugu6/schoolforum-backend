@@ -227,10 +227,7 @@ public class CommentsServiceImpl extends ServiceImpl<CommentsMapper, Comments> i
 
     @Override
     public Page<Comments> list(int pageNumber, int pageSize) {
-        QueryWrapper wrapper = QueryWrapper.create()
-                .where(COMMENTS.IS_DELETED.eq(0))
-                .orderBy(COMMENTS.CREATED_AT, false);
-        return getMapper().paginate(pageNumber, pageSize, wrapper);
+        return listPage(pageNumber, pageSize);
     }
 
     @Override
@@ -263,7 +260,7 @@ public class CommentsServiceImpl extends ServiceImpl<CommentsMapper, Comments> i
     public void unlikeComment(Long commentId) {
         Comments update = UpdateEntity.of(Comments.class, commentId);
         UpdateWrapper<Comments> wrapper = UpdateWrapper.of(update);
-        wrapper.set(COMMENTS.LIKE_COUNT, COMMENTS.LIKE_COUNT.add(-1));
+        wrapper.setRaw(COMMENTS.LIKE_COUNT, "GREATEST(like_count - 1, 0)");
         int updated = getMapper().update(update);
         if (updated > 0) {
             log.info("评论取消点赞: commentId={}", commentId);

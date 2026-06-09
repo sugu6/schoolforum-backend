@@ -2,7 +2,7 @@ server:
   port: 8085
 
 manticore:
-  host: ${MANTICORE_HOST:http://85.137.245.41}
+  host: ${MANTICORE_HOST:http://38.76.209.225}
   port: ${MANTICORE_PORT:9308}
 
 spring:
@@ -33,7 +33,7 @@ spring:
     host: smtp.qq.com
     port: 587
     username: ${DEV_MAIL_USERNAME:3342113181@qq.com}
-    password: ${DEV_MAIL_PASSWORD:knnxihikcucxcija}
+    password: ${MAIL_PASSWORD:}
     properties:
       mail:
         smtp:
@@ -48,7 +48,7 @@ cors:
 oauth:
   github:
     client-id: ${DEV_GITHUB_CLIENT_ID:Ov23ctui8olAxrt6hQeX}
-    client-secret: ${DEV_GITHUB_CLIENT_SECRET:66ebfa9ddbac39bc4e4aef6747a60c0a82d6a8b0}
+    client-secret: ${GITHUB_CLIENT_SECRET:}
     redirect-uri: http://localhost:8080/callback
     disable-ssl: true
 
