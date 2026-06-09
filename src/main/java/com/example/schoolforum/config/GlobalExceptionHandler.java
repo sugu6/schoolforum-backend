@@ -6,8 +6,10 @@ import cn.dev33.satoken.exception.NotRoleException;
 import com.example.schoolforum.exception.BusinessException;
 import com.example.schoolforum.pojo.common.Result;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -82,6 +84,32 @@ public class GlobalExceptionHandler {
     public Result<Void> handleNoResourceFoundException(NoResourceFoundException e, HttpServletRequest request) {
         log.debug("资源未找到: {}", request.getRequestURI());
         return Result.error(404, "资源未找到");
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public Result<Void> handleConstraintViolationException(ConstraintViolationException e, HttpServletRequest request) {
+        String message = e.getConstraintViolations().stream()
+                .map(v -> v.getMessage())
+                .findFirst()
+                .orElse("参数校验失败");
+        log.warn("参数校验失败: {}", message);
+        if (isSseRequest(request)) {
+            return null;
+        }
+        return Result.error(400, message);
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public Result<Void> handleMethodArgumentNotValidException(MethodArgumentNotValidException e, HttpServletRequest request) {
+        String message = e.getBindingResult().getFieldErrors().stream()
+                .map(f -> f.getField() + ": " + f.getDefaultMessage())
+                .findFirst()
+                .orElse("参数校验失败");
+        log.warn("请求参数校验失败: {}", message);
+        if (isSseRequest(request)) {
+            return null;
+        }
+        return Result.error(400, message);
     }
 
     @ExceptionHandler(Exception.class)

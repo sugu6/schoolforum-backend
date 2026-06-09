@@ -20,9 +20,9 @@ COPY --from=build /app/target/*.jar app.jar
 ENV TZ=Asia/Shanghai \
     JAVA_OPTS="-Xms256m -Xmx512m"
 
-EXPOSE 8085
+EXPOSE 8085 8443
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD nc -z localhost 8085 || exit 1
+    CMD nc -z localhost ${SERVER_PORT:-8085} || exit 1
 
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

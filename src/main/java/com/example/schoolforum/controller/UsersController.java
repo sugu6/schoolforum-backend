@@ -83,6 +83,8 @@ public class UsersController {
             @Parameter(description = "年龄") @RequestParam(required = false) Integer age,
             @Parameter(description = "性别", schema = @Schema(allowableValues = {"MALE", "FEMALE", "SECRET"}))
             @RequestParam(required = false) String gender) {
+        validateUsername(username);
+        validatePassword(password);
         Gender userGender = parseGender(gender);
         Users users = new Users();
         users.setUsername(username);
@@ -340,5 +342,23 @@ public class UsersController {
             case "SUPER_ADMIN" -> UserRole.SUPER_ADMIN;
             default -> null;
         };
+    }
+
+    private void validateUsername(String username) {
+        if (username == null || username.length() < 2 || username.length() > 30) {
+            throw new BusinessException("用户名长度必须在2-30个字符之间");
+        }
+        if (!username.matches("^[a-zA-Z0-9_\\u4e00-\\u9fa5]+$")) {
+            throw new BusinessException("用户名只能包含字母、数字、下划线和中文");
+        }
+    }
+
+    private void validatePassword(String password) {
+        if (password == null || password.length() < 8) {
+            throw new BusinessException("密码长度不能少于8位");
+        }
+        if (!password.matches(".*[a-zA-Z].*") || !password.matches(".*\\d.*")) {
+            throw new BusinessException("密码必须包含字母和数字");
+        }
     }
 }

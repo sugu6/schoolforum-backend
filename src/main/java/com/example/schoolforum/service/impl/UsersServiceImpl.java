@@ -116,6 +116,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     @Transactional
     public Users register(String username, String password, String email, Integer age, Gender gender, String captcha) {
         validatePassword(password);
+        validateUsername(username);
 
         if (!verifyCaptcha(email, CodeType.REGISTER, captcha)) {
             throw new BusinessException("验证码错误或已过期");
@@ -282,6 +283,15 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         }
         if (!password.matches(".*[a-zA-Z].*") || !password.matches(".*\\d.*")) {
             throw new BusinessException("密码必须包含字母和数字");
+        }
+    }
+
+    private void validateUsername(String username) {
+        if (username == null || username.length() < 2 || username.length() > 30) {
+            throw new BusinessException("用户名长度必须在2-30个字符之间");
+        }
+        if (!username.matches("^[a-zA-Z0-9_\\u4e00-\\u9fa5]+$")) {
+            throw new BusinessException("用户名只能包含字母、数字、下划线和中文");
         }
     }
 

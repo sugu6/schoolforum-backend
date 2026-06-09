@@ -5,6 +5,7 @@ import com.example.schoolforum.websocket.PrivateMessageWebSocketHandler;
 import com.example.schoolforum.websocket.WebSocketAuthInterceptor;
 import jakarta.servlet.Filter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,15 +28,22 @@ public class WebSocketConfig implements WebSocketConfigurer {
     private final PostStatsWebSocketHandler postStatsWebSocketHandler;
     private final WebSocketAuthInterceptor webSocketAuthInterceptor;
 
+    @Value("${cors.allowed-origins:}")
+    private String corsAllowedOrigins;
+
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
+        String[] origins = corsAllowedOrigins.isEmpty()
+                ? new String[]{"http://localhost:5173", "http://localhost:8080"}
+                : corsAllowedOrigins.split("\\s*,\\s*");
+
         registry.addHandler(privateMessageWebSocketHandler, "/ws/message")
                 .addInterceptors(webSocketAuthInterceptor)
-                .setAllowedOrigins("https://schoolforum.sugu6.top", "http://localhost:5173", "http://localhost:3000", "http://localhost:8080");
+                .setAllowedOrigins(origins);
 
         registry.addHandler(postStatsWebSocketHandler, "/ws/post-stats")
                 .addInterceptors(webSocketAuthInterceptor)
-                .setAllowedOrigins("https://schoolforum.sugu6.top", "http://localhost:5173", "http://localhost:3000", "http://localhost:8080");
+                .setAllowedOrigins(origins);
     }
 
     /**
