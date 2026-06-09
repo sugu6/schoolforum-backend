@@ -33,8 +33,6 @@ services:
       - SERVER_PORT=8085
       - MANTICORE_HOST=${MANTICORE_HOST:-http://manticore}
       - MANTICORE_PORT=${MANTICORE_PORT:-9308}
-    ports:
-      - "8085:8085"
     volumes:
       - /var/log/schoolforum:/var/log/schoolforum
       - uploads_data:/app/uploads
@@ -47,6 +45,21 @@ services:
       timeout: 3s
       retries: 3
       start_period: 40s
+
+  nginx:
+    image: nginx:alpine
+    container_name: schoolforum-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/schoolforum.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+    depends_on:
+      schoolforum:
+        condition: service_started
 
 volumes:
   manticore_data:
