@@ -157,7 +157,11 @@ public class UsersController {
             @Parameter(description = "每页数量，默认10条") @RequestParam(defaultValue = "10") Integer pageSize) {
         if (pageSize > 100) pageSize = 100;
         Page<Users> page = usersService.listPage(pageNumber, pageSize);
-        page.getRecords().forEach(u -> u.setPassword(null));
+        page.getRecords().forEach(u -> {
+            u.setPassword(null);
+            u.setEmail(null);
+            u.setGithubId(null);
+        });
         return page;
     }
 

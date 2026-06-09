@@ -82,7 +82,7 @@ public class PostImageServiceImpl implements PostImageService {
 
         } catch (IOException e) {
             log.error("帖子图片上传失败: error={}", e.getMessage(), e);
-            throw new BusinessException("图片上传失败: " + e.getMessage());
+            throw new BusinessException("图片上传失败，请稍后重试");
         }
     }
 

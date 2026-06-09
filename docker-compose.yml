@@ -30,21 +30,20 @@ services:
       - TZ=Asia/Shanghai
       - SPRING_PROFILES_ACTIVE=prod
       - SERVER_ADDRESS=0.0.0.0
-      - SERVER_PORT=8443
-      - SERVER_SSL_KEY_STORE=file:/app/ssl/keystore.p12
-      - SERVER_SSL_KEY_STORE_PASSWORD=${KEYSTORE_PASSWORD:-schoolforum2026}
-      - SERVER_SSL_KEY_STORE_TYPE=PKCS12
+      - SERVER_PORT=8085
       - JAVA_OPTS=-Xms256m -Xmx512m
       - MANTICORE_HOST=${MANTICORE_HOST:-http://manticore}
       - MANTICORE_PORT=${MANTICORE_PORT:-9308}
     ports:
-      - "8443:8443"
+      - "8085:8085"
     volumes:
       - /var/log/schoolforum:/var/log/schoolforum
       - uploads_data:/app/uploads
-      - /opt/schoolforum/ssl:/app/ssl:ro
+    depends_on:
+      manticore:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "8443"]
+      test: ["CMD", "nc", "-z", "localhost", "8085"]
       interval: 30s
       timeout: 3s
       retries: 3

@@ -234,8 +234,14 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         
         UserRole oldRole = users.getRole();
         
-        if (username != null && !username.isEmpty()) users.setUsername(username);
-        if (password != null && !password.isEmpty()) users.setPassword(passwordEncoder.encode(password));
+        if (username != null && !username.isEmpty()) {
+            validateUsername(username);
+            users.setUsername(username);
+        }
+        if (password != null && !password.isEmpty()) {
+            validatePassword(password);
+            users.setPassword(passwordEncoder.encode(password));
+        }
         if (email != null && !email.isEmpty()) users.setEmail(email);
         if (age != null) users.setAge(age);
         if (gender != null) users.setGender(gender);
@@ -410,7 +416,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
 
         } catch (IOException e) {
             log.error("头像上传失败: userId={}, error={}", userId, e.getMessage(), e);
-            throw new BusinessException("头像上传失败: " + e.getMessage());
+            throw new BusinessException("头像上传失败，请稍后重试");
         }
     }
 

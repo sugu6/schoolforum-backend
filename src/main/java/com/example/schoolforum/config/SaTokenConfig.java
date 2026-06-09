@@ -79,8 +79,6 @@ public class SaTokenConfig implements WebMvcConfigurer {
                 "/posts/list/hot",
                 "/posts/list/latest",
                 "/posts/list/essential",
-                "/posts/*/like",
-                "/posts/*/unlike",
                 "/posts/*/related",
                 "/posts/user/**",
 
@@ -97,8 +95,6 @@ public class SaTokenConfig implements WebMvcConfigurer {
                 "/comments/list",
                 "/comments/list/post/**",
                 "/comments/list/hot/**",
-                "/comments/*/like",
-                "/comments/*/unlike",
 
                 // 关注模块 - 公开接口
                 "/follows/following/**",
