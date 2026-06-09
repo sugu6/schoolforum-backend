@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 @Data
 @Builder
@@ -20,6 +21,7 @@ public class SendMessageRequest {
     private Long receiverId;
 
     @NotNull(message = "消息内容不能为空")
+    @Size(min = 1, max = 500, message = "消息内容长度必须在1-500个字符之间")
     @Schema(description = "消息内容", example = "你好，在吗？")
     private String content;
 

@@ -71,6 +71,7 @@ public class PrivateMessageController {
     @Operation(summary = "标记会话消息已读", description = "将指定会话的所有消息标记为已读")
     public void markAsRead(@Parameter(description = "会话ID") @PathVariable Long conversationId) {
         Long userId = StpUtil.getLoginIdAsLong();
+        conversationService.verifyParticipant(conversationId, userId);
         privateMessageService.markMessagesAsRead(conversationId, userId);
     }
 

@@ -21,4 +21,6 @@ public interface ConversationService extends IService<Conversation> {
 
     void deleteConversation(Long conversationId, Long userId);
 
+    void verifyParticipant(Long conversationId, Long userId);
+
 }

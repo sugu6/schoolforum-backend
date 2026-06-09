@@ -6,7 +6,9 @@ import com.mybatisflex.core.util.UpdateEntity;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.example.schoolforum.exception.BusinessException;
 import com.example.schoolforum.mapper.ConversationMapper;
+import com.example.schoolforum.mapper.UsersMapper;
 import com.example.schoolforum.pojo.Conversation;
+import com.example.schoolforum.pojo.Users;
 import com.example.schoolforum.pojo.dto.ConversationVO;
 import com.example.schoolforum.service.ConversationService;
 import com.example.schoolforum.util.PermissionUtil;
@@ -31,11 +33,17 @@ import static com.example.schoolforum.pojo.table.ConversationTableDef.CONVERSATI
 public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Conversation> implements ConversationService {
 
     private final ConversationMapper conversationMapper;
+    private final UsersMapper usersMapper;
 
     @Override
     public Conversation getOrCreateConversation(Long userId1, Long userId2) {
         if (userId1.equals(userId2)) {
             throw new BusinessException("不能与自己创建会话");
+        }
+
+        Users targetUser = usersMapper.selectOneById(userId2);
+        if (targetUser == null) {
+            throw new BusinessException("目标用户不存在");
         }
 
         Long smallerId = Math.min(userId1, userId2);
@@ -170,6 +178,17 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
         }
 
         conversationMapper.update(update);
+    }
+
+    @Override
+    public void verifyParticipant(Long conversationId, Long userId) {
+        Conversation conversation = conversationMapper.selectOneById(conversationId);
+        if (conversation == null) {
+            throw new BusinessException("会话不存在");
+        }
+        if (!conversation.getUser1Id().equals(userId) && !conversation.getUser2Id().equals(userId)) {
+            throw new BusinessException("无权操作此会话");
+        }
     }
 
 }

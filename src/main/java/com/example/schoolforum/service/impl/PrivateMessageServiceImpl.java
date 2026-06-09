@@ -49,6 +49,9 @@ public class PrivateMessageServiceImpl extends ServiceImpl<PrivateMessageMapper,
         if (content == null || content.trim().isEmpty()) {
             throw new BusinessException("消息内容不能为空");
         }
+        if (content.length() > 500) {
+            throw new BusinessException("消息内容长度不能超过500个字符");
+        }
 
         Conversation conversation = conversationService.getOrCreateConversation(senderId, receiverId);
 
@@ -67,8 +70,12 @@ public class PrivateMessageServiceImpl extends ServiceImpl<PrivateMessageMapper,
         update.setLastMessageId(message.getId());
         update.setLastMessageAt(message.getCreatedAt());
         update.setLastMessageContent(previewContent);
-        update.setUser1Deleted(false);
-        update.setUser2Deleted(false);
+        // 只重置发送者的 deleted 标志，保留接收者的删除状态
+        if (conversation.getUser1Id().equals(senderId)) {
+            update.setUser1Deleted(false);
+        } else {
+            update.setUser2Deleted(false);
+        }
         update.setUpdatedAt(LocalDateTime.now());
         conversationMapper.update(update);
 
