@@ -23,6 +23,8 @@ services:
     image: ghcr.io/suguny/schoolforum-backend:latest
     container_name: schoolforum
     restart: always
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - .env
     command: ["sh", "-c", "java ${JAVA_OPTS:--Xms256m -Xmx512m} -jar app.jar"]
@@ -33,6 +35,7 @@ services:
       - SERVER_PORT=8085
       - MANTICORE_HOST=${MANTICORE_HOST:-http://manticore}
       - MANTICORE_PORT=${MANTICORE_PORT:-9308}
+      - REDIS_HOST=${REDIS_HOST:-host.docker.internal}
     volumes:
       - /var/log/schoolforum:/var/log/schoolforum
       - uploads_data:/app/uploads
