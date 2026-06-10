@@ -37,7 +37,8 @@ public class WebSocketConfig implements WebSocketConfigurer {
                 ? new String[]{"http://localhost:5173", "http://localhost:8080"}
                 : corsAllowedOrigins.split("\\s*,\\s*");
 
-        registry.addHandler(privateMessageWebSocketHandler, "/ws/message")
+        // token 放在路径中（/ws/message/{token}），避免广告拦截器拦截 ?token= 参数
+        registry.addHandler(privateMessageWebSocketHandler, "/ws/message", "/ws/message/**")
                 .addInterceptors(webSocketAuthInterceptor)
                 .setAllowedOrigins(origins);
 

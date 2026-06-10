@@ -27,7 +27,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PrivateMessageWebSocketHandler extends TextWebSocketHandler {
 
     private final ObjectMapper objectMapper;
-
     private final Map<Long, WebSocketSession> sessionMap = new ConcurrentHashMap<>();
 
     @Override
@@ -35,7 +34,7 @@ public class PrivateMessageWebSocketHandler extends TextWebSocketHandler {
         Long userId = (Long) session.getAttributes().get(WebSocketAuthInterceptor.USER_ID_KEY);
         if (userId != null) {
             WebSocketSession oldSession = sessionMap.put(userId, session);
-            if (oldSession != null && oldSession.isOpen()) {
+            if (oldSession != null && oldSession.isOpen() && oldSession != session) {
                 oldSession.close();
             }
             log.info("WebSocket 连接建立: userId={}, sessionId={}", userId, session.getId());
@@ -46,7 +45,7 @@ public class PrivateMessageWebSocketHandler extends TextWebSocketHandler {
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         Long userId = (Long) session.getAttributes().get(WebSocketAuthInterceptor.USER_ID_KEY);
         log.debug("收到 WebSocket 消息: userId={}, payload={}", userId, message.getPayload());
-        
+
         String response = objectMapper.writeValueAsString(Map.of(
                 "type", "pong",
                 "timestamp", System.currentTimeMillis()
@@ -72,12 +71,6 @@ public class PrivateMessageWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    /**
-     * 向指定用户推送私信消息
-     *
-     * @param userId  用户ID
-     * @param message 私信消息
-     */
     public void sendMessage(Long userId, PrivateMessage message) {
         WebSocketSession session = sessionMap.get(userId);
         if (session != null && session.isOpen()) {
@@ -94,12 +87,6 @@ public class PrivateMessageWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    /**
-     * 向指定用户推送未读消息数更新
-     *
-     * @param userId       用户ID
-     * @param unreadCount  未读消息数
-     */
     public void sendUnreadCountUpdate(Long userId, int unreadCount) {
         WebSocketSession session = sessionMap.get(userId);
         if (session != null && session.isOpen()) {
@@ -116,22 +103,11 @@ public class PrivateMessageWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    /**
-     * 检查用户是否在线
-     *
-     * @param userId 用户ID
-     * @return 是否在线
-     */
     public boolean isOnline(Long userId) {
         WebSocketSession session = sessionMap.get(userId);
         return session != null && session.isOpen();
     }
 
-    /**
-     * 获取在线用户数量
-     *
-     * @return 在线用户数量
-     */
     public int getOnlineCount() {
         return sessionMap.size();
     }

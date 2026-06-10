@@ -12,8 +12,10 @@ import org.springframework.web.socket.server.HandshakeInterceptor;
 import java.util.Map;
 
 /**
- * WebSocket 认证拦截器
- * 在 WebSocket 握手时验证用户身份
+ * WebSocket 握手拦截器
+ * 支持两种 token 传递方式：
+ * 1. 路径参数（推荐）：/ws/message/{token}，避免广告拦截器拦截 ?token= 参数
+ * 2. 查询参数（兼容）：/ws/message?token=xxx
  *
  * @author sugu
  * @since 2026-03-07
@@ -28,10 +30,10 @@ public class WebSocketAuthInterceptor implements HandshakeInterceptor {
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
                                     WebSocketHandler wsHandler, Map<String, Object> attributes) throws Exception {
         if (request instanceof ServletServerHttpRequest servletRequest) {
-            String token = servletRequest.getServletRequest().getParameter("token");
+            String token = extractToken(servletRequest);
 
             if (token == null || token.isEmpty()) {
-                log.warn("WebSocket 握手失败: 缺少 token 参数");
+                log.warn("WebSocket 握手失败: 缺少 token");
                 response.setStatusCode(org.springframework.http.HttpStatus.UNAUTHORIZED);
                 return false;
             }
@@ -60,11 +62,31 @@ public class WebSocketAuthInterceptor implements HandshakeInterceptor {
     }
 
     @Override
-    public void afterHandshake(ServerHttpRequest request, ServerHttpResponse response, 
+    public void afterHandshake(ServerHttpRequest request, ServerHttpResponse response,
                                 WebSocketHandler wsHandler, Exception exception) {
         if (exception != null) {
             log.error("WebSocket 握手异常: {}", exception.getMessage());
         }
+    }
+
+    /**
+     * 从请求中提取 token
+     * 优先从路径提取（/ws/message/{token}），其次从查询参数提取（?token=xxx）
+     */
+    private String extractToken(ServletServerHttpRequest servletRequest) {
+        // 1. 从路径中提取：/ws/message/{token}
+        String uri = servletRequest.getURI().getPath();
+        String prefix = "/ws/message/";
+        int idx = uri.indexOf(prefix);
+        if (idx >= 0) {
+            String tokenFromPath = uri.substring(idx + prefix.length());
+            if (!tokenFromPath.isEmpty()) {
+                return tokenFromPath;
+            }
+        }
+
+        // 2. 兼容：从查询参数提取
+        return servletRequest.getServletRequest().getParameter("token");
     }
 
 }
