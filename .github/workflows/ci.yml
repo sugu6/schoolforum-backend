@@ -156,6 +156,23 @@ jobs:
             set -e
             cd /opt/schoolforum
 
+            echo "=== Ensuring .env exists ==="
+            if [ ! -f .env ]; then
+              echo "ERROR: .env file not found at /opt/schoolforum/.env"
+              echo "Please create it based on .env.example"
+              exit 1
+            fi
+
+            # 确保 Redis/MySQL 使用 host.docker.internal（Docker 容器内访问宿主机）
+            if grep -q "REDIS_HOST=38.76.209.225" .env 2>/dev/null; then
+              sed -i 's/REDIS_HOST=38.76.209.225/REDIS_HOST=host.docker.internal/' .env
+              echo "Updated REDIS_HOST to host.docker.internal"
+            fi
+            if grep -q "38.76.209.225:13306" .env 2>/dev/null; then
+              sed -i 's/38.76.209.225:13306/host.docker.internal:13306/' .env
+              echo "Updated DB_URL to host.docker.internal"
+            fi
+
             echo "=== Stopping old containers ==="
             docker compose down --remove-orphans --timeout 10 2>/dev/null || true
             docker rm -f schoolforum schoolforum-nginx schoolforum-certbot 2>/dev/null || true
@@ -168,6 +185,21 @@ jobs:
 
             echo "=== Starting services ==="
             docker compose up -d
+
+            echo "=== Waiting for backend to be healthy ==="
+            for i in $(seq 1 30); do
+              if docker exec schoolforum sh -c "curl -sf http://localhost:8085/categories/list > /dev/null 2>&1 || nc -z localhost 8085"; then
+                echo "Backend is healthy!"
+                break
+              fi
+              if [ "$i" -eq 30 ]; then
+                echo "Backend failed to start. Logs:"
+                docker compose logs schoolforum --tail 50
+                exit 1
+              fi
+              echo "Waiting for backend... ($i/30)"
+              sleep 5
+            done
 
             docker image prune -f
             echo "=== Deploy completed ==="
