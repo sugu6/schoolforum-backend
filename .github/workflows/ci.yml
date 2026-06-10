@@ -133,14 +133,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Copy docker-compose to server
+      - name: Copy docker-compose and nginx config to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DOCKER_HOST }}
           username: root
           password: ${{ secrets.ROOT_PASSWORD }}
           port: ${{ secrets.DOCKER_PORT || 22 }}
-          source: docker-compose.yml,ssl/
+          source: docker-compose.yml,nginx/schoolforum.conf
           target: /opt/schoolforum/
           overwrite: true
 
@@ -187,19 +187,24 @@ jobs:
             docker compose up -d
 
             echo "=== Waiting for backend to be healthy ==="
-            for i in $(seq 1 30); do
+            for i in $(seq 1 60); do
               if docker exec schoolforum sh -c "curl -sf http://localhost:8085/categories/list > /dev/null 2>&1 || nc -z localhost 8085"; then
                 echo "Backend is healthy!"
                 break
               fi
-              if [ "$i" -eq 30 ]; then
+              if [ "$i" -eq 60 ]; then
                 echo "Backend failed to start. Logs:"
                 docker compose logs schoolforum --tail 50
                 exit 1
               fi
-              echo "Waiting for backend... ($i/30)"
+              echo "Waiting for backend... ($i/60)"
               sleep 5
             done
+
+            echo "=== Updating host Nginx config ==="
+            cp /opt/schoolforum/nginx/schoolforum.conf /etc/nginx/conf.d/schoolforum.conf
+            nginx -t && nginx -s reload
+            echo "Nginx config updated and reloaded"
 
             docker image prune -f
             echo "=== Deploy completed ==="

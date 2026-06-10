@@ -129,8 +129,9 @@ public class SaTokenConfig implements WebMvcConfigurer {
                 "/v3/api-docs/**",
                 "/swagger-ui.html",
 
-                // WebSocket
-                "/ws/**",
+                // WebSocket（路径已从 /ws/ 改为 /api/ 避免广告拦截器）
+                "/api/realtime",
+                "/api/post-stats",
 
                 // 静态资源 - 头像
                 "/avatars/**",
