@@ -44,7 +44,7 @@ spring:
             required: true
 
 cors:
-  allowed-origins: https://suguny.github.io,https://schoolforum.sugu6.top
+  allowed-origins: https://schoolforum.sugu6.top
 
 oauth:
   github:
