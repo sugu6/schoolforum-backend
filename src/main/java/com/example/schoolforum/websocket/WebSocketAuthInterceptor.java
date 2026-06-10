@@ -13,9 +13,8 @@ import java.util.Map;
 
 /**
  * WebSocket 握手拦截器
- * 支持两种 token 传递方式：
- * 1. 路径参数（推荐）：/ws/message/{token}，避免广告拦截器拦截 ?token= 参数
- * 2. 查询参数（兼容）：/ws/message?token=xxx
+ * 允许不带 token 的握手，token 通过首条 auth 消息发送
+ * 避免 URL 中携带 token 被广告拦截器拦截
  *
  * @author sugu
  * @since 2026-03-07
@@ -30,31 +29,10 @@ public class WebSocketAuthInterceptor implements HandshakeInterceptor {
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
                                     WebSocketHandler wsHandler, Map<String, Object> attributes) throws Exception {
         if (request instanceof ServletServerHttpRequest servletRequest) {
-            String token = extractToken(servletRequest);
-
-            if (token == null || token.isEmpty()) {
-                log.warn("WebSocket 握手失败: 缺少 token");
-                response.setStatusCode(org.springframework.http.HttpStatus.UNAUTHORIZED);
-                return false;
-            }
-
-            try {
-                Object loginId = StpUtil.getLoginIdByToken(token);
-                if (loginId == null) {
-                    log.warn("WebSocket 握手失败: 无效的 token");
-                    response.setStatusCode(org.springframework.http.HttpStatus.UNAUTHORIZED);
-                    return false;
-                }
-
-                Long userId = Long.parseLong(loginId.toString());
-                attributes.put(USER_ID_KEY, userId);
-                log.info("WebSocket 握手成功: userId={}", userId);
-                return true;
-            } catch (Exception e) {
-                log.warn("WebSocket 握手失败: token 验证异常 - {}", e.getMessage());
-                response.setStatusCode(org.springframework.http.HttpStatus.UNAUTHORIZED);
-                return false;
-            }
+            // 不再从 URL 提取 token，允许所有握手通过
+            // 认证通过首条 auth 消息完成
+            log.debug("WebSocket 握手: 等待 auth 消息认证, uri={}", servletRequest.getURI().getPath());
+            return true;
         }
 
         response.setStatusCode(org.springframework.http.HttpStatus.FORBIDDEN);
@@ -70,23 +48,22 @@ public class WebSocketAuthInterceptor implements HandshakeInterceptor {
     }
 
     /**
-     * 从请求中提取 token
-     * 优先从路径提取（/ws/message/{token}），其次从查询参数提取（?token=xxx）
+     * 验证 token 并返回 userId，供 Handler 调用
      */
-    private String extractToken(ServletServerHttpRequest servletRequest) {
-        // 1. 从路径中提取：/ws/message/{token}
-        String uri = servletRequest.getURI().getPath();
-        String prefix = "/ws/message/";
-        int idx = uri.indexOf(prefix);
-        if (idx >= 0) {
-            String tokenFromPath = uri.substring(idx + prefix.length());
-            if (!tokenFromPath.isEmpty()) {
-                return tokenFromPath;
-            }
+    public Long validateToken(String token) {
+        if (token == null || token.isEmpty()) {
+            return null;
         }
-
-        // 2. 兼容：从查询参数提取
-        return servletRequest.getServletRequest().getParameter("token");
+        try {
+            Object loginId = StpUtil.getLoginIdByToken(token);
+            if (loginId == null) {
+                return null;
+            }
+            return Long.parseLong(loginId.toString());
+        } catch (Exception e) {
+            log.warn("WebSocket token 验证异常: {}", e.getMessage());
+            return null;
+        }
     }
 
 }
