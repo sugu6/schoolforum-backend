@@ -36,6 +36,8 @@ services:
       - MANTICORE_HOST=${MANTICORE_HOST:-http://manticore}
       - MANTICORE_PORT=${MANTICORE_PORT:-9308}
       - REDIS_HOST=${REDIS_HOST:-host.docker.internal}
+    ports:
+      - "127.0.0.1:8085:8085"
     volumes:
       - /var/log/schoolforum:/var/log/schoolforum
       - uploads_data:/app/uploads
