@@ -4,6 +4,7 @@ import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckRole;
 import cn.dev33.satoken.annotation.SaMode;
 import cn.dev33.satoken.stp.StpUtil;
+import com.example.schoolforum.constant.RedisCacheKey;
 import com.example.schoolforum.enums.ActiveStatus;
 import com.example.schoolforum.enums.CodeType;
 import com.example.schoolforum.enums.Gender;
@@ -17,18 +18,24 @@ import com.example.schoolforum.service.AccountDeletionService;
 import com.example.schoolforum.service.SearchService;
 import com.example.schoolforum.service.UsersService;
 import com.example.schoolforum.util.PermissionUtil;
+import com.example.schoolforum.util.RefreshTokenCookieUtils;
 import com.mybatisflex.core.paginate.Page;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/users")
@@ -40,6 +47,8 @@ public class UsersController {
     private final SearchService searchService;
     private final AccountDeletionService accountDeletionService;
     private final PasswordEncoder passwordEncoder;
+    private final StringRedisTemplate redisTemplate;
+    private final RefreshTokenCookieUtils refreshTokenCookieUtils;
 
     @GetMapping("captcha")
     @Operation(summary = "发送验证码", description = "发送验证码。注册和重置密码需传邮箱，修改密码需登录且无需传邮箱")
@@ -106,6 +115,8 @@ public class UsersController {
         usersService.save(users);
         searchService.indexUser(UserSearchDocument.fromEntity(users));
         users.setPassword(null);
+        users.setEmail(null);
+        users.setGithubId(null);
         return users;
     }
 
@@ -157,11 +168,6 @@ public class UsersController {
             @Parameter(description = "每页数量，默认10条") @RequestParam(defaultValue = "10") Integer pageSize) {
         if (pageSize > 100) pageSize = 100;
         Page<Users> page = usersService.listPage(pageNumber, pageSize);
-        page.getRecords().forEach(u -> {
-            u.setPassword(null);
-            u.setEmail(null);
-            u.setGithubId(null);
-        });
         return page;
     }
 
@@ -172,24 +178,17 @@ public class UsersController {
         if (users == null) {
             throw new BusinessException("用户不存在");
         }
-        users.setPassword(null);
-        users.setEmail(null);
-        users.setGithubId(null);
         return users;
     }
 
     @GetMapping("list")
-    @Operation(summary = "查询用户", description = "分页获取用户列表")
+    @SaCheckLogin
+    @Operation(summary = "查询用户", description = "分页获取用户列表，需要登录")
     public Page<Users> list(
             @Parameter(description = "页码，默认第1页") @RequestParam(defaultValue = "1") Integer pageNumber,
             @Parameter(description = "每页数量，默认10条") @RequestParam(defaultValue = "10") Integer pageSize) {
         if (pageSize > 100) pageSize = 100;
         Page<Users> page = usersService.list(pageNumber, pageSize);
-        page.getRecords().forEach(u -> {
-            u.setPassword(null);
-            u.setEmail(null);
-            u.setGithubId(null);
-        });
         return page;
     }
 
@@ -208,19 +207,42 @@ public class UsersController {
     }
 
     @PostMapping("login")
-    @Operation(summary = "用户登录", description = "用户登录接口，返回用户信息和Token")
+    @Operation(summary = "用户登录", description = "用户登录接口，返回用户信息，Token 通过 httpOnly Cookie 自动设置")
     public LoginResponse login(
             @Parameter(description = "用户名", required = true) @RequestParam String username,
-            @Parameter(description = "密码", required = true) @RequestParam String password) {
-        return usersService.login(username, password);
+            @Parameter(description = "密码", required = true) @RequestParam String password,
+            HttpServletResponse response) {
+        LoginResponse loginResponse = usersService.login(username, password);
+
+        // Access Token: Sa-Token 在 StpUtil.login() 时已自动写入 httpOnly Cookie
+        // Refresh Token: 在此生成并写入 httpOnly Cookie
+        String refreshToken = UUID.randomUUID().toString().replace("-", "");
+        redisTemplate.opsForValue().set(
+            RedisCacheKey.REFRESH_TOKEN + refreshToken,
+            String.valueOf(loginResponse.user().getId()),
+            RedisCacheKey.REFRESH_TOKEN_TTL,
+            TimeUnit.DAYS
+        );
+        refreshTokenCookieUtils.setRefreshTokenCookie(response, refreshToken);
+
+        return loginResponse;
     }
 
     @PostMapping("logout")
-    @Operation(summary = "用户登出", description = "用户登出接口")
-    public String logout() {
+    @Operation(summary = "用户登出", description = "用户登出接口，清除 httpOnly Cookie 和服务端会话")
+    public String logout(HttpServletRequest request, HttpServletResponse response) {
         if (StpUtil.isLogin()) {
+            // 清除 refresh token（从 Cookie 读取）
+            String refreshToken = refreshTokenCookieUtils.getRefreshTokenFromCookie(request);
+            if (refreshToken != null) {
+                redisTemplate.delete(RedisCacheKey.REFRESH_TOKEN + refreshToken);
+            }
             StpUtil.logout();
         }
+        // 清除所有认证 Cookie
+        refreshTokenCookieUtils.clearRefreshTokenCookie(response);
+        // 显式清除 Access Token Cookie（JWT Simple 模式下 StpUtil.logout() 不一定清除 Cookie）
+        refreshTokenCookieUtils.clearAccessTokenCookie(response);
         return "登出成功";
     }
 

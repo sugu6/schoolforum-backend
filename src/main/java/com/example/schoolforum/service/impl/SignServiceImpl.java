@@ -298,8 +298,7 @@ public class SignServiceImpl extends ServiceImpl<SignRecordMapper, SignRecord> i
                 .where(SignRecord::getUserId).eq(userId)
                 .orderBy(SignRecord::getSignDate, false);
 
-        Page<SignRecord> page = signRecordMapper.paginate(
-                Page.of(pageNumber, pageSize), queryWrapper);
+        Page<SignRecord> page = signRecordMapper.paginate(pageNumber, pageSize, queryWrapper);
 
         Page<SignRecordVO> voPage = new Page<>();
         voPage.setPageNumber(page.getPageNumber());

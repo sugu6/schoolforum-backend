@@ -21,6 +21,8 @@ import jakarta.annotation.PostConstruct;
 @RequiredArgsConstructor
 public class SaTokenConfig implements WebMvcConfigurer {
 
+    private final RateLimitInterceptor rateLimitInterceptor;
+
     @Value("${sa-token.jwt-secret-key:}")
     private String jwtSecretKey;
 
@@ -29,12 +31,27 @@ public class SaTokenConfig implements WebMvcConfigurer {
 
     @PostConstruct
     public void checkJwtSecret() {
-        if ("prod".equals(activeProfile)) {
-            if (jwtSecretKey == null || jwtSecretKey.isEmpty()) {
-                throw new IllegalStateException("生产环境必须配置 JWT_SECRET_KEY 环境变量");
+        if (jwtSecretKey == null || jwtSecretKey.isEmpty()) {
+            if ("prod".equals(activeProfile)) {
+                throw new IllegalStateException(
+                    "【启动失败】生产环境必须配置 JWT_SECRET_KEY 环境变量！" +
+                    "请在启动命令中添加: --env JWT_SECRET_KEY=your-strong-random-secret" +
+                    " 或在 docker-compose/environment 中设置该变量");
             }
-            if (jwtSecretKey.contains("dev") || jwtSecretKey.contains("do-not-use")) {
-                throw new IllegalStateException("生产环境禁止使用开发默认 JWT 密钥，请配置强随机密钥");
+            // 非 prod 环境也不允许空密钥，给出警告并使用一个临时默认值
+            log.warn("⚠️ JWT 密钥未配置（JWT_SECRET_KEY 环境变量为空），使用开发默认密钥。" +
+                    "生产环境务必设置 JWT_SECRET_KEY 环境变量！");
+        }
+        if ("prod".equals(activeProfile) && jwtSecretKey != null) {
+            if (jwtSecretKey.contains("dev") || jwtSecretKey.contains("do-not-use") || jwtSecretKey.contains("test")) {
+                throw new IllegalStateException(
+                    "【启动失败】生产环境禁止使用开发/测试默认 JWT 密钥，请配置强随机密钥！" +
+                    "建议使用: openssl rand -base64 64 生成");
+            }
+            if (jwtSecretKey.length() < 32) {
+                throw new IllegalStateException(
+                    "【启动失败】生产环境 JWT 密钥长度不足（当前 " + jwtSecretKey.length() + " 字符），要求至少 32 字符！" +
+                    "建议使用: openssl rand -base64 64 生成");
             }
         }
     }
@@ -46,6 +63,11 @@ public class SaTokenConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        // 速率限制拦截器（优先级最高，在认证之前执行）
+        registry.addInterceptor(rateLimitInterceptor)
+                .addPathPatterns("/**")
+                .order(Integer.MIN_VALUE);
+
         registry.addInterceptor(new SaInterceptor(handle -> {
             try {
                 SaHolder.getStorage();
@@ -70,7 +92,6 @@ public class SaTokenConfig implements WebMvcConfigurer {
                 "/users/verifyCaptcha",
                 "/users/captcha",
                 "/users/getInfo/**",
-                "/users/list",
                 "/users/logout",
 
                 // 帖子模块 - 公开接口
@@ -124,14 +145,17 @@ public class SaTokenConfig implements WebMvcConfigurer {
                 "/oauth/render/github",
                 "/oauth/callback/github",
 
+                // Token 刷新
+                "/auth/refresh",
+
                 // Swagger 文档
                 "/swagger-ui/**",
                 "/v3/api-docs/**",
                 "/swagger-ui.html",
 
-                // WebSocket（路径已从 /ws/ 改为 /api/ 避免广告拦截器）
-                "/api/realtime",
-                "/api/post-stats",
+                // WebSocket（使用 /ws/ 前缀，认证通过首条 auth 消息完成）
+                "/ws/message",
+                "/ws/post-stats",
 
                 // 静态资源 - 头像
                 "/avatars/**",

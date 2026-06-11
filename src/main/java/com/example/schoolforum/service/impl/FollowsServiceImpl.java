@@ -56,7 +56,7 @@ public class FollowsServiceImpl extends ServiceImpl<FollowsMapper, Follows> impl
                 .createdAt(LocalDateTime.now())
                 .build();
         try {
-            mapper.insert(follow);
+            this.save(follow);
 
             log.info("用户关注: followerId={}, followingId={}", followerId, followingId);
 

@@ -2,7 +2,7 @@ server:
   port: 8085
 
 manticore:
-  host: ${MANTICORE_HOST:http://38.76.209.225}
+  host: ${MANTICORE_HOST:http://127.0.0.1}
   port: ${MANTICORE_PORT:9308}
 
 spring:
@@ -25,14 +25,14 @@ spring:
     redis:
       host: 127.0.0.1
       port: 6379
-      password:
+      password: ${DEV_REDIS_PASSWORD:}
       database: 0
       timeout: 10s
 
   mail:
     host: smtp.qq.com
     port: 587
-    username: ${DEV_MAIL_USERNAME:3342113181@qq.com}
+    username: ${DEV_MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
     properties:
       mail:
@@ -47,12 +47,31 @@ cors:
 
 oauth:
   github:
-    client-id: ${DEV_GITHUB_CLIENT_ID:Ov23ctui8olAxrt6hQeX}
+    client-id: ${DEV_GITHUB_CLIENT_ID:}
     client-secret: ${GITHUB_CLIENT_SECRET:}
-    redirect-uri: http://localhost:8080/callback
-    disable-ssl: true
+    redirect-uri: ${GITHUB_REDIRECT_URI:http://localhost:8080/callback}
+    disable-ssl: ${OAUTH_DISABLE_SSL:false}
 
 logging:
   level:
     com.example.schoolforum: debug
     org.springframework.web: debug
+
+sa-token:
+  token-name: Authorization
+  token-prefix: Bearer
+  cookie-auto-fill-prefix: true
+  timeout: 3600
+  active-timeout: -1
+  is-concurrent: true
+  is-share: true
+  is-log: false
+  is-read-header: true
+  is-read-cookie: true
+  is-read-body: false
+  jwt-secret-key: ${JWT_SECRET_KEY:dev-secret-key-for-local-only}
+  cookie:
+    httpOnly: true
+    secure: false
+    sameSite: Lax
+    path: /

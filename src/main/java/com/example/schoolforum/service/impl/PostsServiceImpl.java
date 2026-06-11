@@ -36,6 +36,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -164,19 +165,20 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
         String zSetKey = RedisCacheKey.hotRankZSetKey("all");
         
         try {
-            Set<String> topPostIdsFromCache = redisTemplate.opsForZSet()
-                    .reverseRange(zSetKey, (long) (pageNumber - 1) * pageSize, (long) pageNumber * pageSize - 1);
+            Set<ZSetOperations.TypedTuple<String>> topPostsFromCache = redisTemplate.opsForZSet()
+                    .reverseRangeWithScores(zSetKey, (long) (pageNumber - 1) * pageSize, (long) pageNumber * pageSize - 1);
 
-            if (topPostIdsFromCache != null && !topPostIdsFromCache.isEmpty()) {
-                List<Long> postIds = topPostIdsFromCache.stream()
-                        .map(Long::parseLong)
-                        .toList();
-
+            if (topPostsFromCache != null && !topPostsFromCache.isEmpty()) {
+                List<Long> postIds = new ArrayList<>();
                 Map<Long, Double> scoreMap = new HashMap<>();
-                for (Long postId : postIds) {
-                    Double score = redisTemplate.opsForZSet().score(zSetKey, String.valueOf(postId));
-                    if (score != null) {
-                        scoreMap.put(postId, score);
+                
+                for (ZSetOperations.TypedTuple<String> tuple : topPostsFromCache) {
+                    if (tuple.getValue() != null) {
+                        Long postId = Long.parseLong(tuple.getValue());
+                        postIds.add(postId);
+                        if (tuple.getScore() != null) {
+                            scoreMap.put(postId, tuple.getScore());
+                        }
                     }
                 }
 
@@ -217,7 +219,10 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
         }
 
         QueryWrapper wrapper = postQueryHelper.buildBaseQueryWithRelations()
-                .orderBy("p.is_pinned", false);
+                .orderBy("p.is_pinned", false)
+                .orderBy("p.like_count", false)
+                .orderBy("p.view_count", false)
+                .orderBy("p.comment_count", false);
 
         if (!categoryIds.isEmpty()) {
             wrapper.where(POSTS.CATEGORY_ID.in(categoryIds));
@@ -226,11 +231,6 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
         Page<Posts> page = postsMapper.paginate(pageNumber, pageSize, wrapper);
         
         List<Posts> records = page.getRecords();
-        records.sort((a, b) -> Double.compare(
-            hotScoreCalculator.calculateScore(b),
-            hotScoreCalculator.calculateScore(a)
-        ));
-
         for (Posts post : records) {
             post.setHotScore(hotScoreCalculator.calculateScore(post));
         }
@@ -260,7 +260,7 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Posts createPost(Long authorId, String title, String content, List<Long> tagIds, Long categoryId, String coverImage) {
         Posts post = new Posts();
         post.setAuthorId(authorId);
@@ -305,7 +305,7 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Posts updatePost(Long postId, String title, String content, List<Long> tagIds, Long categoryId, String coverImage, Long userId) {
         Posts post = getPostOrThrow(postId);
         PermissionUtil.checkOwnerOrAdmin(post.getAuthorId(), "无权限操作此帖子");
@@ -348,7 +348,7 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void deletePost(Long postId, Long userId) {
         Posts post = getPostOrThrow(postId);
         PermissionUtil.checkOwnerOrAdmin(post.getAuthorId(), "无权限操作此帖子");
@@ -466,28 +466,20 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
             Map<Long, Integer> favoriteCounts = postStatsCache.batchGetRealTimeFavoriteCount(postIds);
 
             for (Posts post : posts) {
-                Integer viewCount = viewCounts.get(post.getId());
-                if (viewCount != null && viewCount > 0) {
-                    post.setViewCount(viewCount);
-                }
-
-                Integer likeCount = likeCounts.get(post.getId());
-                if (likeCount != null && likeCount > 0) {
-                    post.setLikeCount(likeCount);
-                }
-
-                Integer commentCount = commentCounts.get(post.getId());
-                if (commentCount != null && commentCount > 0) {
-                    post.setCommentCount(commentCount);
-                }
-
-                Integer favoriteCount = favoriteCounts.get(post.getId());
-                if (favoriteCount != null && favoriteCount > 0) {
-                    post.setFavoriteCount(favoriteCount);
-                }
+                Long id = post.getId();
+                applyIfPositive(viewCounts.get(id), post::setViewCount);
+                applyIfPositive(likeCounts.get(id), post::setLikeCount);
+                applyIfPositive(commentCounts.get(id), post::setCommentCount);
+                applyIfPositive(favoriteCounts.get(id), post::setFavoriteCount);
             }
         } catch (Exception e) {
             log.warn("填充帖子实时统计数据失败，使用数据库原始数据: {}", e.getMessage());
+        }
+    }
+
+    private void applyIfPositive(Integer value, java.util.function.IntConsumer setter) {
+        if (value != null && value > 0) {
+            setter.accept(value);
         }
     }
 
@@ -532,7 +524,7 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void likePost(Long postId) {
         Posts post = this.getById(postId);
         if (post == null) {
@@ -556,7 +548,7 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void unlikePost(Long postId) {
         Posts update = UpdateEntity.of(Posts.class, postId);
         UpdateWrapper<Posts> wrapper = UpdateWrapper.of(update);
@@ -575,7 +567,7 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void favoritePost(Long postId) {
         Posts post = this.getById(postId);
         if (post == null) {
@@ -594,7 +586,7 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void unfavoritePost(Long postId) {
         Posts update = UpdateEntity.of(Posts.class, postId);
         UpdateWrapper<Posts> wrapper = UpdateWrapper.of(update);
@@ -608,7 +600,7 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void setPinned(Long postId, boolean pinned) {
         getPostOrThrow(postId);
 
@@ -620,7 +612,7 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void setEssential(Long postId, boolean essential) {
         getPostOrThrow(postId);
 

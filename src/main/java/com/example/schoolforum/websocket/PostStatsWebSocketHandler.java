@@ -27,7 +27,15 @@ public class PostStatsWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        log.debug("WebSocket 连接建立: sessionId={}", session.getId());
+        Long userId = (Long) session.getAttributes().get(WebSocketAuthInterceptor.USER_ID_KEY);
+
+        // Cookie 预认证（握手时已从 httpOnly Cookie 读取 token），userId 必定不为 null
+        String response = objectMapper.writeValueAsString(Map.of(
+                "type", "auth_success",
+                "data", Map.of("userId", userId)
+        ));
+        session.sendMessage(new TextMessage(response));
+        log.info("PostStats WebSocket Cookie 认证成功: userId={}, sessionId={}", userId, session.getId());
     }
 
     @Override

@@ -3,6 +3,7 @@ package com.example.schoolforum.pojo;
 import com.example.schoolforum.enums.ActiveStatus;
 import com.example.schoolforum.enums.Gender;
 import com.example.schoolforum.enums.UserRole;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.mybatisflex.annotation.Id;
 import com.mybatisflex.annotation.KeyType;
 import com.mybatisflex.annotation.Table;
@@ -37,6 +38,7 @@ public class Users implements Serializable {
     private String username;
 
     @Schema(description = "密码", example = "123456")
+    @JsonIgnore
     private String password;
 
     @Schema(description = "邮箱", example = "zhangsan@example.com")
@@ -56,6 +58,7 @@ public class Users implements Serializable {
     private String bio;
 
     @Schema(description = "GitHub用户ID", example = "1234567")
+    @JsonIgnore
     private String githubId;
 
     @Schema(description = "用户角色", example = "USER")

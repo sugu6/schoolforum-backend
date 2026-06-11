@@ -5,6 +5,14 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
 
+/**
+ * OAuth 回调响应 DTO
+ * 
+ * refreshToken 不在此对象中返回，而是通过 httpOnly Cookie 由服务端直接设置到浏览器。
+ * 这确保了 refreshToken 永远不会通过 JSON 响应体暴露给 JavaScript。
+ *
+ * @author sugu
+ */
 @Schema(description = "OAuth回调响应")
 public record OAuthCallbackResult(
     
@@ -14,8 +22,8 @@ public record OAuthCallbackResult(
     @Schema(description = "登录成功时的用户信息")
     Users user,
     
-    @Schema(description = "登录成功时的token")
-    String token,
+    @Schema(description = "access token 有效期（秒）")
+    long expiresIn,
     
     @Schema(description = "GitHub用户临时标识(用于确认用户名)")
     String tempKey,
@@ -33,14 +41,14 @@ public record OAuthCallbackResult(
     String avatarUrl
 ) {
     
-    public static OAuthCallbackResult success(Users user, String token) {
-        return new OAuthCallbackResult("success", user, token, null, null, null, null, null);
+    public static OAuthCallbackResult success(Users user, long expiresIn) {
+        return new OAuthCallbackResult("success", user, expiresIn, null, null, null, null, null);
     }
     
     public static OAuthCallbackResult conflict(String tempKey, String suggestedUsername, 
                                                 List<String> suggestedUsernames, 
                                                 String email, String avatarUrl) {
-        return new OAuthCallbackResult("conflict", null, null, tempKey, suggestedUsername, 
+        return new OAuthCallbackResult("conflict", null, 0, tempKey, suggestedUsername, 
                                         suggestedUsernames, email, avatarUrl);
     }
 }

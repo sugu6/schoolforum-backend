@@ -2,6 +2,7 @@ package com.example.schoolforum.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.example.schoolforum.config.GitHubOAuthProperties;
+import com.example.schoolforum.constant.RedisCacheKey;
 import com.example.schoolforum.exception.BusinessException;
 import com.example.schoolforum.pojo.Users;
 import com.example.schoolforum.pojo.dto.OAuthCallbackResult;
@@ -23,6 +24,7 @@ import me.zhyd.oauth.utils.AuthStateUtils;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.*;
 import com.example.schoolforum.util.SslUtils;
+import com.example.schoolforum.util.RefreshTokenCookieUtils;
 
 import java.io.IOException;
 import java.net.URLEncoder;
@@ -44,6 +46,7 @@ public class OAuthController {
     private final UsersService usersService;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final RefreshTokenCookieUtils refreshTokenCookieUtils;
 
     private static final String OAUTH_TEMP_KEY_PREFIX = "oauth:temp:";
     private static final String BIND_STATE_PREFIX = "bind:";
@@ -82,7 +85,8 @@ public class OAuthController {
     @Operation(summary = "GitHub回调", description = "GitHub授权回调接口，自动区分登录和绑定操作")
     public OAuthCallbackResult githubCallback(
             AuthCallback callback,
-            @Parameter(description = "状态参数，用于区分登录和绑定") @RequestParam(required = false) String state) {
+            @Parameter(description = "状态参数，用于区分登录和绑定") @RequestParam(required = false) String state,
+            HttpServletResponse response) {
         
         // state 非空校验
         if (state == null || state.isEmpty()) {
@@ -109,24 +113,25 @@ public class OAuthController {
         }
         
         AuthRequest authRequest = getGithubAuthRequest();
-        AuthResponse<AuthUser> response = authRequest.login(callback);
-        if (response.getCode() != 2000) {
-            throw new BusinessException("GitHub授权失败: " + response.getMsg());
+        AuthResponse<AuthUser> authResponse = executeOAuthLogin(authRequest, callback);
+        if (authResponse.getCode() != 2000) {
+            throw new BusinessException("GitHub授权失败: " + authResponse.getMsg());
         }
-        AuthUser authUser = response.getData();
+        AuthUser authUser = authResponse.getData();
         
         if (state != null && state.startsWith(BIND_STATE_PREFIX)) {
             return handleGithubBind(authUser, state);
         }
         
-        return handleGithubLogin(authUser);
+        return handleGithubLogin(authUser, response);
     }
 
     @PostMapping("/confirm-username")
     @Operation(summary = "确认用户名", description = "用户名冲突时，用户选择或输入新用户名后调用此接口完成注册")
     public OAuthCallbackResult confirmUsername(
             @Parameter(description = "临时标识key") @RequestParam String tempKey,
-            @Parameter(description = "用户选择的用户名") @RequestParam String username) {
+            @Parameter(description = "用户选择的用户名") @RequestParam String username,
+            HttpServletResponse response) {
 
         if (username == null || username.length() < 2 || username.length() > 30) {
             throw new BusinessException("用户名长度必须在2-30个字符之间");
@@ -160,7 +165,7 @@ public class OAuthController {
             
             log.info("GitHub用户确认用户名并注册成功: githubId={}, username={}", tempUser.githubId(), username);
             
-            return loginAndReturnResult(user);
+            return loginAndReturnResult(user, response);
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
@@ -185,25 +190,41 @@ public class OAuthController {
         log.info("用户解绑GitHub成功: userId={}", userId);
     }
 
-    private OAuthCallbackResult loginAndReturnResult(Users user) {
+    private OAuthCallbackResult loginAndReturnResult(Users user, HttpServletResponse response) {
         StpUtil.login(user.getId());
         if (user.getRole() != null) {
             StpUtil.getSession().set("roles",
                     Collections.singletonList(user.getRole().name().toLowerCase()));
         }
-        String token = StpUtil.getTokenValue();
+
+        // Access Token: Sa-Token 自动写入 httpOnly Cookie
+        // 生成 refresh token 并写入 httpOnly Cookie
+        String refreshToken = UUID.randomUUID().toString().replace("-", "");
+        redisTemplate.opsForValue().set(
+            RedisCacheKey.REFRESH_TOKEN + refreshToken,
+            String.valueOf(user.getId()),
+            RedisCacheKey.REFRESH_TOKEN_TTL,
+            TimeUnit.DAYS
+        );
+
+        // Refresh Token: 写入 httpOnly Cookie，不放入返回值
+        if (response != null) {
+            refreshTokenCookieUtils.setRefreshTokenCookie(response, refreshToken);
+        }
+
         user.setPassword(null);
         usersService.cacheUserInfo(user);
-        return OAuthCallbackResult.success(user, token);
+        long expiresIn = StpUtil.getTokenInfo().getTokenTimeout();
+        return OAuthCallbackResult.success(user, expiresIn);
     }
 
-    private OAuthCallbackResult handleGithubLogin(AuthUser authUser) {
+    private OAuthCallbackResult handleGithubLogin(AuthUser authUser, HttpServletResponse response) {
         String githubId = authUser.getUuid();
         Users user = usersService.getByGithubId(githubId);
 
         if (user != null) {
             user = usersService.updateGithubUser(user, authUser.getAvatar());
-            return loginAndReturnResult(user);
+            return loginAndReturnResult(user, response);
         }
 
         String baseUsername = authUser.getUsername();
@@ -213,7 +234,7 @@ public class OAuthController {
         
         if (usersService.getByUsername(baseUsername) == null) {
             user = usersService.createGithubUser(githubId, baseUsername, authUser.getEmail(), authUser.getAvatar());
-            return loginAndReturnResult(user);
+            return loginAndReturnResult(user, response);
         }
 
         String tempKey = UUID.randomUUID().toString().replace("-", "");
@@ -272,7 +293,8 @@ public class OAuthController {
         Users existUser = usersService.getByGithubId(githubId);
         if (existUser != null) {
             if (existUser.getId().equals(userId)) {
-                return OAuthCallbackResult.success(currentUser, StpUtil.getTokenValue());
+                long expiresIn = StpUtil.getTokenInfo().getTokenTimeout();
+                return OAuthCallbackResult.success(currentUser, expiresIn);
             }
             throw new BusinessException("该GitHub账号已被其他用户绑定");
         }
@@ -283,8 +305,8 @@ public class OAuthController {
         currentUser.setPassword(null);
         
         log.info("用户绑定GitHub成功: userId={}, githubId={}", userId, githubId);
-        
-        return OAuthCallbackResult.success(currentUser, StpUtil.getTokenValue());
+        long expiresIn = StpUtil.getTokenInfo().getTokenTimeout();
+        return OAuthCallbackResult.success(currentUser, expiresIn);
     }
 
     private List<String> generateSuggestedUsernames(String baseUsername) {
@@ -302,14 +324,22 @@ public class OAuthController {
     }
 
     private AuthRequest getGithubAuthRequest() {
-        if (gitHubOAuthProperties.isDisableSsl()) {
-            SslUtils.disableSslVerification();
-        }
         return new AuthGithubRequest(AuthConfig.builder()
                 .clientId(gitHubOAuthProperties.getClientId())
                 .clientSecret(gitHubOAuthProperties.getClientSecret())
                 .redirectUri(gitHubOAuthProperties.getRedirectUri())
                 .build());
+    }
+
+    /**
+     * 在 SSL 验证禁用状态下执行 OAuth 请求（如果配置需要）。
+     * 临时禁用，请求完成后自动恢复，不影响 JVM 全局。
+     */
+    private AuthResponse<AuthUser> executeOAuthLogin(AuthRequest authRequest, AuthCallback callback) {
+        if (gitHubOAuthProperties.isDisableSsl()) {
+            return SslUtils.withSslDisabled(() -> authRequest.login(callback));
+        }
+        return authRequest.login(callback);
     }
 
     record GitHubTempUser(String githubId, String email, String avatarUrl) {}

@@ -22,7 +22,6 @@ import com.example.schoolforum.pojo.dto.UserSearchDocument;
 import com.example.schoolforum.util.FileUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import jakarta.mail.MessagingException;
@@ -58,9 +57,7 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements UsersService {
 
-    @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
-    @Autowired
-    private JavaMailSender mailSender;
+    private final JavaMailSender mailSender;
     private final StringRedisTemplate redisTemplate;
     private final FileUploadProperties fileUploadProperties;
     private final PasswordEncoder passwordEncoder;
@@ -113,7 +110,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Users register(String username, String password, String email, Integer age, Gender gender, String captcha) {
         validatePassword(password);
         validateUsername(username);
@@ -163,12 +160,11 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         searchService.indexUser(UserSearchDocument.fromEntity(users));
         
         log.info("用户注册成功: username={}, email={}", username, email);
-        users.setPassword(null);
         return users;
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public LoginResponse login(String username, String password) {
         Users existUser = getMapper().selectOneByQuery(
             QueryWrapper.create().where(Users::getUsername).eq(username)
@@ -194,13 +190,16 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
             StpUtil.getSession().set("roles",
                     Collections.singletonList(existUser.getRole().name().toLowerCase()));
         }
-        String token = StpUtil.getTokenValue();
-        
+
         existUser.setPassword(null);
         cacheUserInfo(existUser);
-        
+
+        long expiresIn = StpUtil.getTokenInfo().getTokenTimeout();
         log.info("用户登录成功: username={}", username);
-        return new LoginResponse(existUser, token);
+
+        // Access Token 由 Sa-Token 自动写入 httpOnly Cookie
+        // Refresh Token 由 Controller 层生成并写入 httpOnly Cookie
+        return new LoginResponse(existUser, expiresIn);
     }
 
     @Override
@@ -225,7 +224,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Users updateUser(Long targetId, String username, String password, String email, Integer age, Gender gender, String bio, UserRole role, boolean isAdmin, boolean isSuperAdmin) {
         Users users = this.getById(targetId);
         if (users == null) {
@@ -267,7 +266,6 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         }
         
         log.info("用户信息更新成功: userId={}", targetId);
-        users.setPassword(null);
         return users;
     }
 
@@ -279,7 +277,6 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     @Override
     public Page<Users> listPage(int pageNumber, int pageSize) {
         Page<Users> result = getMapper().paginate(pageNumber, pageSize, QueryWrapper.create());
-        result.getRecords().forEach(u -> u.setPassword(null));
         return result;
     }
 
@@ -302,7 +299,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void changePassword(Long userId, String oldPassword, String newPassword, String captcha) {
         validatePassword(newPassword);
 
@@ -332,7 +329,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void resetPassword(String email, String newPassword, String captcha) {
         validatePassword(newPassword);
 
@@ -506,7 +503,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Users createGithubUser(String githubId, String username, String email, String avatarUrl) {
         Users user = new Users();
         user.setUsername(generateUniqueUsername(username));
@@ -534,7 +531,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Users updateGithubUser(Users user, String avatarUrl) {
         user.setLastLoginAt(LocalDateTime.now());
         user.setAvatarUrl(avatarUrl);
@@ -583,7 +580,13 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         try {
             String cached = redisTemplate.opsForValue().get(cacheKey);
             if (cached != null) {
-                return objectMapper.readValue(cached, Users.class);
+                Users cachedUser = objectMapper.readValue(cached, Users.class);
+                // 检查缓存数据是否包含 email 字段，如果不包含则清除缓存重新加载
+                if (cachedUser.getEmail() != null || !cached.contains("\"email\"")) {
+                    return cachedUser;
+                }
+                // 旧缓存没有 email 字段，清除并重新加载
+                redisTemplate.delete(cacheKey);
             }
         } catch (Exception e) {
             log.warn("读取用户缓存失败: userId={}", userId, e);
@@ -626,7 +629,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void bindGithub(Long userId, String githubId, String avatarUrl) {
         Users user = this.getById(userId);
         if (user == null) {
@@ -646,7 +649,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void unbindGithub(Long userId) {
         Users user = this.getById(userId);
         if (user == null) {
@@ -663,7 +666,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void updatePrivacy(Long userId, Boolean showFollowing, Boolean showFollowers) {
         Users user = this.getById(userId);
         if (user == null) {

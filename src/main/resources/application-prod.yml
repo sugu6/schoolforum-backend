@@ -8,7 +8,7 @@ manticore:
 
 spring:
   datasource:
-    url: ${DB_URL:jdbc:mysql://38.76.209.225:3306/schoolforum?characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    url: ${DB_URL:jdbc:mysql://127.0.0.1:3306/schoolforum?characterEncoding=utf-8&useSSL=true&serverTimezone=Asia/Shanghai}
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -24,7 +24,7 @@ spring:
 
   data:
     redis:
-      host: ${REDIS_HOST:38.76.209.225}
+      host: ${REDIS_HOST:127.0.0.1}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD}
       database: 0
@@ -33,7 +33,7 @@ spring:
   mail:
     host: ${MAIL_HOST:smtp.qq.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:3342113181@qq.com}
+    username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD}
     properties:
       mail:
@@ -54,18 +54,26 @@ oauth:
 
 springdoc:
   swagger-ui:
-    try-it-out-enabled: false
+    enabled: false
+  api-docs:
+    enabled: false
 sa-token:
   token-name: Authorization
   token-prefix: Bearer
-  timeout: 604800
+  timeout: 7200
   active-timeout: -1
   is-concurrent: true
   is-share: true
   is-log: false
   is-read-header: true
-  is-read-cookie: false
-  jwt-secret-key: ${JWT_SECRET_KEY:}
+  is-read-cookie: true
+  is-read-body: false
+  jwt-secret-key: ${JWT_SECRET_KEY}
+  cookie:
+    httpOnly: true
+    secure: true
+    sameSite: Lax
+    path: /
 file:
   upload:
     avatar-path: ${UPLOAD_AVATAR_PATH:/app/uploads/avatars/}

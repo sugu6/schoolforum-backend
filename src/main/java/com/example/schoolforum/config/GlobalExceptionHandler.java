@@ -20,11 +20,15 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
-    public Result<Void> handleBusinessException(BusinessException e, HttpServletRequest request) {
+    public Result<Void> handleBusinessException(BusinessException e, HttpServletRequest request, HttpServletResponse response) {
         log.warn("业务异常: {}", e.getMessage());
         if (isSseRequest(request)) {
             log.warn("SSE 请求中发生业务异常，无法返回错误响应");
             return null;
+        }
+        // 认证相关业务异常（401）需要设置 HTTP 状态码，以便前端正确触发 401 处理逻辑
+        if (e.getCode() != null && e.getCode() == 401) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         }
         return Result.error(e.getCode(), e.getMessage());
     }

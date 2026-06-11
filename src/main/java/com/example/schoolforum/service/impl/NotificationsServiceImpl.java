@@ -119,7 +119,7 @@ public class NotificationsServiceImpl extends ServiceImpl<NotificationsMapper, N
     @Override
     public void deleteNotification(Long notificationId, Long userId) {
         Notifications notification = this.getById(notificationId);
-        PermissionUtil.checkDeletePermission(notification != null ? notification.getUserId() : null, userId, "通知");
+        PermissionUtil.checkOwnership(notification != null ? notification.getUserId() : null, userId, "通知", "无权删除此");
         
         this.removeById(notificationId);
     }

@@ -20,7 +20,6 @@ import com.mybatisflex.core.util.UpdateEntity;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.example.schoolforum.mapper.CommentsMapper;
 import com.example.schoolforum.pojo.Comments;
-import com.example.schoolforum.service.CommentsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -47,7 +46,7 @@ public class CommentsServiceImpl extends ServiceImpl<CommentsMapper, Comments> i
     private final PostStatsWebSocketHandler postStatsWebSocketHandler;
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Comments addComment(Long authorId, Long postId, Long parentId, String content) {
         Posts post = postsService.getById(postId);
         if (post == null) {
@@ -116,7 +115,7 @@ public class CommentsServiceImpl extends ServiceImpl<CommentsMapper, Comments> i
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Comments updateComment(Long commentId, String content, Long userId) {
         Comments comment = getCommentOrThrow(commentId);
         PermissionUtil.checkOwnerOrAdmin(comment.getAuthorId(), "无权限操作此评论");
@@ -130,7 +129,7 @@ public class CommentsServiceImpl extends ServiceImpl<CommentsMapper, Comments> i
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public String deleteComment(Long commentId, Long userId) {
         Comments comment = getCommentOrThrow(commentId);
         PermissionUtil.checkOwnerOrAdmin(comment.getAuthorId(), "无权限操作此评论");
@@ -239,7 +238,7 @@ public class CommentsServiceImpl extends ServiceImpl<CommentsMapper, Comments> i
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void likeComment(Long commentId) {
         Comments comment = this.getById(commentId);
         if (comment == null) {
@@ -256,7 +255,7 @@ public class CommentsServiceImpl extends ServiceImpl<CommentsMapper, Comments> i
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void unlikeComment(Long commentId) {
         Comments update = UpdateEntity.of(Comments.class, commentId);
         UpdateWrapper<Comments> wrapper = UpdateWrapper.of(update);
@@ -296,6 +295,11 @@ public class CommentsServiceImpl extends ServiceImpl<CommentsMapper, Comments> i
         List<Users> users = usersMapper.selectListByQuery(wrapper);
 
         return users.stream()
+                .peek(user -> {
+                    user.setPassword(null);
+                    user.setEmail(null);
+                    user.setGithubId(null);
+                })
                 .collect(Collectors.toMap(Users::getId, user -> user));
     }
 

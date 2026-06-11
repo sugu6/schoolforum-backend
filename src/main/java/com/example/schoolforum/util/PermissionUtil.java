@@ -103,26 +103,22 @@ public final class PermissionUtil {
      * @param resourceName 资源名称（用于错误消息）
      */
     public static void checkOwnership(Long resourceOwnerId, Long currentUserId, String resourceName) {
-        if (resourceOwnerId == null) {
-            throw new BusinessException(resourceName + "不存在");
-        }
-        if (!resourceOwnerId.equals(currentUserId)) {
-            throw new BusinessException("无权操作此" + resourceName);
-        }
+        checkOwnership(resourceOwnerId, currentUserId, resourceName, "无权操作此");
     }
 
     /**
-     * 校验用户是否有权删除指定资源
+     * 校验用户是否有权操作指定资源
      * @param resourceOwnerId 资源所属者ID
      * @param currentUserId 当前用户ID
      * @param resourceName 资源名称（用于错误消息）
+     * @param action 操作描述（如"无权删除此"、"无权修改此"）
      */
-    public static void checkDeletePermission(Long resourceOwnerId, Long currentUserId, String resourceName) {
+    public static void checkOwnership(Long resourceOwnerId, Long currentUserId, String resourceName, String action) {
         if (resourceOwnerId == null) {
             throw new BusinessException(resourceName + "不存在");
         }
         if (!resourceOwnerId.equals(currentUserId)) {
-            throw new BusinessException("无权删除此" + resourceName);
+            throw new BusinessException(action + resourceName);
         }
     }
 

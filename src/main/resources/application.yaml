@@ -16,14 +16,21 @@ mybatis-flex:
 sa-token:
   token-name: Authorization
   token-prefix: Bearer
+  cookie-auto-fill-prefix: true
   timeout: 604800
   active-timeout: -1
   is-concurrent: true
   is-share: true
   is-log: false
   is-read-header: true
-  is-read-cookie: false
+  is-read-cookie: true
+  is-read-body: false
   jwt-secret-key: ${JWT_SECRET_KEY:schoolforum-dev-jwt-secret-key-do-not-use-in-production}
+  cookie:
+    httpOnly: true
+    secure: false
+    sameSite: Lax
+    path: /
 
 springdoc:
   swagger-ui:
@@ -38,6 +45,9 @@ hot-rank:
   decay-exponent: 1.5
   essential-bonus: 50.0
   pinned-bonus: 30.0
+  rate-weight: 5.0
+  max-rate: 1.0
+  min-views-for-rate: 50
 
 file:
   upload:

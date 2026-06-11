@@ -38,7 +38,7 @@ public class FavoritesServiceImpl extends ServiceImpl<FavoritesMapper, Favorites
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Favorites addFavorite(Long userId, Long postId) {
         Posts post = postsMapper.selectOneById(postId);
         if (post == null) {
@@ -53,8 +53,11 @@ public class FavoritesServiceImpl extends ServiceImpl<FavoritesMapper, Favorites
         try {
             this.save(favorite);
         } catch (DuplicateKeyException e) {
-            // 已收藏，幂等处理
-            return favorite;
+            // 已收藏，幂等处理 - 查询并返回现有记录
+            QueryWrapper existingQuery = QueryWrapper.create()
+                    .where(Favorites::getUserId).eq(userId)
+                    .and(Favorites::getPostId).eq(postId);
+            return getMapper().selectOneByQuery(existingQuery);
         }
 
         eventPublisher.publishEvent(new PostStatsUpdateEvent(postId, PostStatsUpdateEvent.StatsType.FAVORITE_ADD));
@@ -64,7 +67,7 @@ public class FavoritesServiceImpl extends ServiceImpl<FavoritesMapper, Favorites
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void removeFavorite(Long userId, Long postId) {
         QueryWrapper wrapper = QueryWrapper.create()
                 .where(Favorites::getUserId).eq(userId)

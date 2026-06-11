@@ -13,14 +13,11 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 /**
  * 私信 WebSocket 处理器
- * 连接建立后需先发送 {"type":"auth","token":"xxx"} 进行认证
- * 认证成功后才注册会话并接收/发送业务消息
+ * 认证通过 httpOnly Cookie 在握手阶段完成（WebSocketAuthInterceptor）
+ * 连接建立后即可接收/发送业务消息
  *
  * @author sugu
  * @since 2026-03-07
@@ -31,35 +28,25 @@ import java.util.concurrent.TimeUnit;
 public class PrivateMessageWebSocketHandler extends TextWebSocketHandler {
 
     private final ObjectMapper objectMapper;
-    private final WebSocketAuthInterceptor authInterceptor;
     private final Map<Long, WebSocketSession> sessionMap = new ConcurrentHashMap<>();
-
-    private static final long AUTH_TIMEOUT_MS = 10_000;
-
-    private static final ScheduledExecutorService authTimeoutScheduler =
-            Executors.newSingleThreadScheduledExecutor(r -> {
-                Thread t = new Thread(r, "ws-auth-timeout");
-                t.setDaemon(true);
-                return t;
-            });
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        // 未认证，等待 auth 消息
-        log.debug("WebSocket 连接建立(未认证): sessionId={}", session.getId());
-        scheduleAuthTimeout(session);
+        Long userId = (Long) session.getAttributes().get(WebSocketAuthInterceptor.USER_ID_KEY);
+
+        // Cookie 预认证（握手时已从 httpOnly Cookie 读取 token），userId 必定不为 null
+        registerSession(userId, session);
+        String response = objectMapper.writeValueAsString(Map.of(
+                "type", "auth_success",
+                "data", Map.of("userId", userId)
+        ));
+        session.sendMessage(new TextMessage(response));
+        log.info("WebSocket Cookie 认证成功: userId={}, sessionId={}", userId, session.getId());
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         Long userId = (Long) session.getAttributes().get(WebSocketAuthInterceptor.USER_ID_KEY);
-
-        // 未认证：只处理 auth 消息
-        if (userId == null) {
-            handleAuthMessage(session, message);
-            return;
-        }
 
         log.debug("收到 WebSocket 消息: userId={}, payload={}", userId, message.getPayload());
 
@@ -88,37 +75,6 @@ public class PrivateMessageWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    private void handleAuthMessage(WebSocketSession session, TextMessage message) {
-        try {
-            Map<String, Object> data = objectMapper.readValue(message.getPayload(), Map.class);
-            String type = (String) data.get("type");
-            if (!"auth".equals(type)) {
-                sendAndClose(session, "auth_required", "请先发送认证消息");
-                return;
-            }
-
-            String token = (String) data.get("token");
-            Long userId = authInterceptor.validateToken(token);
-            if (userId == null) {
-                sendAndClose(session, "auth_error", "无效的 token");
-                return;
-            }
-
-            session.getAttributes().put(WebSocketAuthInterceptor.USER_ID_KEY, userId);
-            registerSession(userId, session);
-
-            String response = objectMapper.writeValueAsString(Map.of(
-                    "type", "auth_success",
-                    "data", Map.of("userId", userId)
-            ));
-            session.sendMessage(new TextMessage(response));
-            log.info("WebSocket 认证成功: userId={}, sessionId={}", userId, session.getId());
-        } catch (Exception e) {
-            log.warn("WebSocket auth 消息处理失败: {}", e.getMessage());
-            sendAndClose(session, "auth_error", "认证失败");
-        }
-    }
-
     private void registerSession(Long userId, WebSocketSession session) {
         WebSocketSession oldSession = sessionMap.put(userId, session);
         if (oldSession != null && oldSession.isOpen() && oldSession != session) {
@@ -127,33 +83,6 @@ public class PrivateMessageWebSocketHandler extends TextWebSocketHandler {
             } catch (IOException e) {
                 log.warn("关闭旧 WebSocket 会话失败: userId={}", userId);
             }
-        }
-    }
-
-    private void scheduleAuthTimeout(WebSocketSession session) {
-        authTimeoutScheduler.schedule(() -> {
-            try {
-                Long userId = (Long) session.getAttributes().get(WebSocketAuthInterceptor.USER_ID_KEY);
-                if (userId == null && session.isOpen()) {
-                    log.warn("WebSocket 认证超时: sessionId={}", session.getId());
-                    sendAndClose(session, "auth_timeout", "认证超时");
-                }
-            } catch (Exception e) {
-                // 会话可能已关闭
-            }
-        }, AUTH_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-    }
-
-    private void sendAndClose(WebSocketSession session, String type, String reason) {
-        try {
-            String msg = objectMapper.writeValueAsString(Map.of(
-                    "type", type,
-                    "data", Map.of("message", reason)
-            ));
-            session.sendMessage(new TextMessage(msg));
-            session.close(CloseStatus.POLICY_VIOLATION);
-        } catch (IOException e) {
-            log.warn("发送 WebSocket 消息失败: {}", e.getMessage());
         }
     }
 
