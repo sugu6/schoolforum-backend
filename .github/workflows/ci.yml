@@ -151,12 +151,18 @@ jobs:
 
       - name: Create Release
         if: github.ref == 'refs/heads/master'
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: ${{ steps.version.outputs.tag }}
-          body: ${{ steps.version.outputs.changelog }}
-          files: target/*.jar
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 创建并推送tag
+          git tag ${{ steps.version.outputs.tag }}
+          git push origin ${{ steps.version.outputs.tag }}
+          
+          # 创建Release
+          gh release create ${{ steps.version.outputs.tag }} \
+            --title "${{ steps.version.outputs.tag }}" \
+            --notes "${{ steps.version.outputs.changelog }}" \
+            target/*.jar
 
   deploy:
     name: Deploy to Docker Server
