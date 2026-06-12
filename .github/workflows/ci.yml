@@ -114,14 +114,29 @@ jobs:
           echo "tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
           
           # 获取更新日志
+          CHANGELOG_FILE=$(mktemp)
+          echo "## ${NEW_TAG}" > "$CHANGELOG_FILE"
+          echo "" >> "$CHANGELOG_FILE"
+          echo "### 更新日志" >> "$CHANGELOG_FILE"
+          echo "" >> "$CHANGELOG_FILE"
+          
           if [ -z "$LATEST_TAG" ]; then
-            COMMITS=$(git log --pretty=format:"- %s" -20)
+            git log --pretty=format:"- **%s**%n%b---" >> "$CHANGELOG_FILE"
           else
-            COMMITS=$(git log --pretty=format:"- %s" ${LATEST_TAG}..HEAD)
+            git log --pretty=format:"- **%s**%n%b---" "${LATEST_TAG}..HEAD" >> "$CHANGELOG_FILE"
           fi
+          
+          echo "" >> "$CHANGELOG_FILE"
+          echo "### 安装" >> "$CHANGELOG_FILE"
+          echo '```bash' >> "$CHANGELOG_FILE"
+          echo "docker pull ghcr.io/suguny/schoolforum-backend:${NEW_TAG}" >> "$CHANGELOG_FILE"
+          echo '```' >> "$CHANGELOG_FILE"
+          
+          # 读取文件内容作为输出
           echo "changelog<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$COMMITS" >> "$GITHUB_OUTPUT"
+          cat "$CHANGELOG_FILE" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
+          rm -f "$CHANGELOG_FILE"
 
       - uses: actions/setup-java@v4
         if: github.ref == 'refs/heads/master'
@@ -140,11 +155,7 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.tag }}
-          body: |
-            ## ${{ steps.version.outputs.tag }}
-            
-            ### 更新日志
-            ${{ steps.version.outputs.changelog }}
+          body: ${{ steps.version.outputs.changelog }}
           files: target/*.jar
 
   deploy:
