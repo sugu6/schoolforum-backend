@@ -148,7 +148,11 @@ jobs:
 
       - name: Build JAR
         if: github.ref == 'refs/heads/master'
-        run: chmod +x mvnw && ./mvnw package -DskipTests --batch-mode
+        run: |
+          # 去掉v前缀用于Maven版本号
+          MVN_VERSION=${{ steps.version.outputs.tag }}
+          MVN_VERSION=${MVN_VERSION#v}
+          chmod +x mvnw && ./mvnw package -DskipTests -Drevision=${MVN_VERSION} --batch-mode
 
       - name: Create Release
         if: github.ref == 'refs/heads/master'
