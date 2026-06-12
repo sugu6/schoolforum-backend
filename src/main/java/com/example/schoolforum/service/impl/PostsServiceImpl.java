@@ -728,6 +728,19 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
 
             List<Posts> randomPosts = postsMapper.selectListByQuery(wrapper);
             relatedPosts.addAll(randomPosts);
+            for (Posts post : randomPosts) {
+                excludeIds.add(post.getId());
+            }
+        }
+
+        if (relatedPosts.size() < limit) {
+            QueryWrapper wrapper = postQueryHelper.buildBaseQueryWithRelations()
+                    .where("p.id NOT IN ({0})", excludeIds.stream().map(String::valueOf).collect(Collectors.joining(",")))
+                    .orderBy("p.created_at", "DESC")
+                    .limit(limit - relatedPosts.size());
+
+            List<Posts> latestPosts = postsMapper.selectListByQuery(wrapper);
+            relatedPosts.addAll(latestPosts);
         }
 
         Collections.shuffle(relatedPosts);
