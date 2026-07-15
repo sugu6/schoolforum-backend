@@ -4,20 +4,24 @@ services:
     container_name: manticore
     restart: always
     ports:
-      - "9306:9306"
-      - "9308:9308"
-      - "9312:9312"
+      - "127.0.0.1:9306:9306"
+      - "127.0.0.1:9308:9308"
+      - "127.0.0.1:9312:9312"
     volumes:
       - manticore_data:/var/lib/manticore
     environment:
       - TZ=Asia/Shanghai
       - EXTRA=1
     healthcheck:
-      test: ["CMD", "mysqladmin", "-h", "127.0.0.1", "-P", "9306", "ping"]
+      test: ["CMD", "mysql", "-h", "127.0.0.1", "-P", "9306", "-e", "SHOW TABLES"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
 
   schoolforum:
     image: ghcr.io/suguny/schoolforum-backend:latest
@@ -27,7 +31,7 @@ services:
       - "host.docker.internal:host-gateway"
     env_file:
       - .env
-    command: ["sh", "-c", "java ${JAVA_OPTS:--Xms256m -Xmx512m} -jar app.jar"]
+    command: ["sh", "-c", "java ${JAVA_OPTS:--Xms128m -Xmx384m} -jar app.jar"]
     environment:
       - TZ=Asia/Shanghai
       - SPRING_PROFILES_ACTIVE=prod
@@ -50,6 +54,10 @@ services:
       timeout: 3s
       retries: 3
       start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   # Nginx 在宿主机独立运行，不在容器内
   # 配置文件位于 /etc/nginx/conf.d/schoolforum.conf
