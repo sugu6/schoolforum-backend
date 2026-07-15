@@ -237,14 +237,9 @@ jobs:
               sleep 5
             done
 
-            echo "=== Updating host Nginx config ==="
-            cp /opt/schoolforum/nginx/schoolforum.conf /etc/nginx/conf.d/schoolforum.conf
-
-            # 确保前端静态文件目录存在
-            mkdir -p /var/www/schoolforum
-
-            nginx -t && nginx -s reload
-            echo "Nginx config updated and reloaded"
+            echo "=== Skipping nginx config ==="
+            echo "Nginx is managed by BT Panel, no need to configure system nginx"
+            echo "Current BT nginx config: /www/server/panel/vhost/nginx/schoolforum.sugu6.top.conf"
 
             docker image prune -f
             echo "=== Deploy completed ==="
