@@ -67,15 +67,6 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Delete old GHCR package versions
-        if: github.ref == 'refs/heads/master'
-        uses: actions/delete-package-versions@v5
-        with:
-          package-name: 'schoolforum-backend'
-          package-type: 'container'
-          min-versions-to-keep: 1
-          ignore-missing-packages: true
-
       - id: meta
         uses: docker/metadata-action@v5
         with:
