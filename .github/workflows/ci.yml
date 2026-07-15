@@ -9,7 +9,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: suguny/schoolforum-backend
+  IMAGE_NAME: sugu6/schoolforum-backend
 
 jobs:
   test:
@@ -71,7 +71,7 @@ jobs:
         if: github.ref == 'refs/heads/master'
         uses: actions/delete-package-versions@v5
         with:
-          package-name: 'schoolforum-backend'
+          package-name: 'sugu6/schoolforum-backend'
           package-type: 'container'
           min-versions-to-keep: 1
 
@@ -130,7 +130,7 @@ jobs:
           echo "" >> "$CHANGELOG_FILE"
           echo "### 安装" >> "$CHANGELOG_FILE"
           echo '```bash' >> "$CHANGELOG_FILE"
-          echo "docker pull ghcr.io/suguny/schoolforum-backend:${NEW_TAG}" >> "$CHANGELOG_FILE"
+          echo "docker pull ghcr.io/sugu6/schoolforum-backend:${NEW_TAG}" >> "$CHANGELOG_FILE"
           echo '```' >> "$CHANGELOG_FILE"
           
           # 读取文件内容作为输出

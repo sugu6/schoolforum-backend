@@ -24,7 +24,7 @@ services:
           memory: 128M
 
   schoolforum:
-    image: ghcr.io/suguny/schoolforum-backend:latest
+    image: ghcr.io/sugu6/schoolforum-backend:latest
     container_name: schoolforum
     restart: always
     extra_hosts:
