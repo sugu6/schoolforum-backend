@@ -2,6 +2,7 @@ package com.example.schoolforum.controller;
 
 import cn.dev33.satoken.annotation.SaCheckRole;
 import cn.dev33.satoken.annotation.SaMode;
+import com.example.schoolforum.exception.BusinessException;
 import com.example.schoolforum.pojo.dto.CombinedSearchResult;
 import com.example.schoolforum.pojo.dto.KeywordSuggestion;
 import com.example.schoolforum.service.SearchService;
@@ -9,6 +10,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,6 +18,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/search")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "搜索管理", description = "基于Manticore Search的全文搜索接口")
 public class SearchController {
 
@@ -49,12 +52,17 @@ public class SearchController {
     @SaCheckRole(value = {"admin", "super_admin"}, mode = SaMode.OR)
     public String sync() {
         synchronized (syncLock) {
-            searchService.deleteAllIndexes();
-            searchService.syncAllPosts();
-            searchService.syncAllUsers();
-            long postCount = searchService.getPostsCollectionCount();
-            long userCount = searchService.getUsersCollectionCount();
-            return String.format("索引重建完成（帖子：%d 条，用户：%d 条）", postCount, userCount);
+            try {
+                searchService.deleteAllIndexes();
+                searchService.syncAllPosts();
+                searchService.syncAllUsers();
+                long postCount = searchService.getPostsCollectionCount();
+                long userCount = searchService.getUsersCollectionCount();
+                return String.format("索引重建完成（帖子：%d 条，用户：%d 条）", postCount, userCount);
+            } catch (Exception e) {
+                log.error("重建索引失败", e);
+                throw new BusinessException("搜索服务连接失败，索引重建未完成，请稍后重试");
+            }
         }
     }
 
@@ -63,8 +71,13 @@ public class SearchController {
     @SaCheckRole(value = {"admin", "super_admin"}, mode = SaMode.OR)
     public String clear() {
         synchronized (syncLock) {
-            searchService.deleteAllIndexes();
-            return "所有索引已清空";
+            try {
+                searchService.deleteAllIndexes();
+                return "所有索引已清空";
+            } catch (Exception e) {
+                log.error("清空索引失败", e);
+                throw new BusinessException("搜索服务连接失败，请稍后重试");
+            }
         }
     }
 }

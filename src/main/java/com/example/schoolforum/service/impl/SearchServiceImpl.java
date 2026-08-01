@@ -59,7 +59,7 @@ public class SearchServiceImpl implements SearchService {
             DeleteDocumentRequest deleteRequest = new DeleteDocumentRequest();
             deleteRequest.index(PostDocument.INDEX_NAME).setId(postId);
             indexApi.delete(deleteRequest);
-        } catch (ApiException e) {
+        } catch (Exception e) {
             log.error("Failed to delete post {}: {}", postId, e.getMessage(), e);
             throw new RuntimeException("删除帖子搜索索引失败: " + e.getMessage(), e);
         }
@@ -78,7 +78,8 @@ public class SearchServiceImpl implements SearchService {
             doc.put("created_at", parseTimestamp(document.getCreatedAt()));
             docRequest.index(UserDocument.INDEX_NAME).id(document.getId()).setDoc(doc);
             indexApi.replace(docRequest);
-        } catch (ApiException e) {
+        } catch (Exception e) {
+            // 写索引是尽力而为，搜索引擎不可用时不阻塞用户更新/注册等业务
             log.error("Failed to index user {}: {}", document.getId(), e.getMessage(), e);
         }
     }
@@ -89,7 +90,7 @@ public class SearchServiceImpl implements SearchService {
             DeleteDocumentRequest deleteRequest = new DeleteDocumentRequest();
             deleteRequest.index(UserDocument.INDEX_NAME).setId(userId);
             indexApi.delete(deleteRequest);
-        } catch (ApiException e) {
+        } catch (Exception e) {
             log.error("Failed to delete user {}: {}", userId, e.getMessage(), e);
             throw new RuntimeException("删除用户搜索索引失败: " + e.getMessage(), e);
         }
@@ -195,8 +196,10 @@ public class SearchServiceImpl implements SearchService {
             utilsApi.sql("DROP TABLE IF EXISTS " + PostDocument.INDEX_NAME, true);
             utilsApi.sql("DROP TABLE IF EXISTS " + UserDocument.INDEX_NAME, true);
             log.info("Deleted all search indexes");
-        } catch (ApiException e) {
+        } catch (Exception e) {
             log.error("Failed to delete indexes: {}", e.getMessage(), e);
+            // 失败必须抛出，避免"删了一半"后继续同步造成空索引
+            throw new RuntimeException("删除搜索索引失败: " + e.getMessage(), e);
         }
     }
 
@@ -211,7 +214,7 @@ public class SearchServiceImpl implements SearchService {
             searchRequest.setLimit(0);
             SearchResponse response = searchApi.search(searchRequest);
             return response.getHits().getTotal() != null ? response.getHits().getTotal() : 0L;
-        } catch (ApiException e) {
+        } catch (Exception e) {
             log.error("Failed to get posts count: {}", e.getMessage());
             return 0L;
         }
@@ -228,7 +231,7 @@ public class SearchServiceImpl implements SearchService {
             searchRequest.setLimit(0);
             SearchResponse response = searchApi.search(searchRequest);
             return response.getHits().getTotal() != null ? response.getHits().getTotal() : 0L;
-        } catch (ApiException e) {
+        } catch (Exception e) {
             log.error("Failed to get users count: {}", e.getMessage());
             return 0L;
         }
@@ -300,8 +303,10 @@ public class SearchServiceImpl implements SearchService {
             docMap.put("updated_at", doc.getUpdatedAt());
             docRequest.index(PostDocument.INDEX_NAME).id(doc.getId()).setDoc(docMap);
             indexApi.replace(docRequest);
-        } catch (ApiException e) {
+        } catch (Exception e) {
             log.error("Failed to insert post {}: {}", doc.getId(), e.getMessage(), e);
+            // 同步索引必须失败即停，避免静默产生空索引
+            throw new RuntimeException("写入帖子搜索索引失败: " + e.getMessage(), e);
         }
     }
 
@@ -317,8 +322,9 @@ public class SearchServiceImpl implements SearchService {
             docMap.put("created_at", doc.getCreatedAt());
             docRequest.index(UserDocument.INDEX_NAME).id(doc.getId()).setDoc(docMap);
             indexApi.replace(docRequest);
-        } catch (ApiException e) {
+        } catch (Exception e) {
             log.error("Failed to insert user {}: {}", doc.getId(), e.getMessage(), e);
+            throw new RuntimeException("写入用户搜索索引失败: " + e.getMessage(), e);
         }
     }
 

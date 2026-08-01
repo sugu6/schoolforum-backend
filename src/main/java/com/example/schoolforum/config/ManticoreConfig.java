@@ -23,9 +23,9 @@ public class ManticoreConfig {
     public ApiClient manticoreApiClient() {
         ApiClient apiClient = com.manticoresearch.client.Configuration.getDefaultApiClient();
         apiClient.setBasePath(host + ":" + port);
-        // 设置超时，防止 Manticore 不可用时阻塞请求
-        apiClient.setConnectTimeout(3000);
-        apiClient.setReadTimeout(5000);
+        // 设置超时，防止 Manticore 不可用时阻塞请求（容器重启/预热期间连接可能较慢）
+        apiClient.setConnectTimeout(10000);
+        apiClient.setReadTimeout(15000);
         log.info("Manticore Search client initialized: {}:{}", host, port);
         return apiClient;
     }
