@@ -423,10 +423,10 @@ public class SearchServiceImpl implements SearchService {
             }
 
             // 模糊查询：username/bio 包含关键词（LIKE '%关键词%'），仅已激活用户
-            String likePattern = escapeLikePattern(keyword);
+            String containsPattern = "%" + escapeLikePattern(keyword) + "%";
             QueryWrapper wrapper = QueryWrapper.create();
             wrapper.where(Users::getIsActive).eq(ActiveStatus.ACTIVE);
-            wrapper.and("(username LIKE ? OR bio LIKE ?)", likePattern, likePattern);
+            wrapper.and("(username LIKE ? OR bio LIKE ?)", containsPattern, containsPattern);
             wrapper.orderBy("id", true);
             Page<Users> userPage = usersMapper.paginate(page, pageSize, wrapper);
 
