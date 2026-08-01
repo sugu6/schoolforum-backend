@@ -118,7 +118,8 @@ public class SearchServiceImpl implements SearchService {
             QueryWrapper wrapper = QueryWrapper.create()
                     .select("DISTINCT title")
                     .from(Posts.class)
-                    .likeRight("title", likePattern)
+                    // MyBatis-Flex: likeLeft 生成 LIKE '值%'（前缀匹配），likeRight 是 LIKE '%值'（后缀）
+                    .likeLeft("title", likePattern)
                     .orderBy("title", true)
                     .limit(limit);
             return postsMapper.selectListByQueryAs(wrapper, String.class)
