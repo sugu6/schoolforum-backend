@@ -5,7 +5,8 @@ services:
     restart: always
     ports:
       - "127.0.0.1:9306:9306"
-      - "127.0.0.1:9308:9308"
+      # 临时开放 9308 供本地后端直连远程 Manticore，搜索引擎稳定后改回 127.0.0.1
+      - "0.0.0.0:9308:9308"
       - "127.0.0.1:9312:9312"
     volumes:
       - manticore_data:/var/lib/manticore

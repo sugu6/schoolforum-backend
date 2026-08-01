@@ -2,6 +2,7 @@ server:
   port: 8085
 
 manticore:
+  # 临时方案：本地直连远程 Manticore（9308 公网开放），搜索引擎稳定后收紧
   host: ${MANTICORE_HOST:http://38.76.209.225}
   port: ${MANTICORE_PORT:9308}
 
