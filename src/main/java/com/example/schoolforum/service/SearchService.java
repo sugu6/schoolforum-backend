@@ -26,6 +26,8 @@ public interface SearchService {
 
     void deleteAllIndexes();
 
+    void flushAllIndexes();
+
     long getPostsCollectionCount();
 
     long getUsersCollectionCount();

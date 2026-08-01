@@ -58,6 +58,8 @@ public class SearchController {
                 searchService.syncAllUsers();
                 long postCount = searchService.getPostsCollectionCount();
                 long userCount = searchService.getUsersCollectionCount();
+                // 强制落盘，避免容器重启后 RT 表回滚到旧快照
+                searchService.flushAllIndexes();
                 return String.format("索引重建完成（帖子：%d 条，用户：%d 条）", postCount, userCount);
             } catch (Exception e) {
                 log.error("重建索引失败", e);

@@ -219,6 +219,17 @@ public class SearchServiceImpl implements SearchService {
     }
 
     @Override
+    public void flushAllIndexes() {
+        try {
+            utilsApi.sql("FLUSH TABLE " + PostDocument.INDEX_NAME, true);
+            utilsApi.sql("FLUSH TABLE " + UserDocument.INDEX_NAME, true);
+            log.info("Manticore indexes flushed to disk");
+        } catch (Exception e) {
+            log.warn("FLUSH TABLE 失败: {}", e.getMessage());
+        }
+    }
+
+    @Override
     public long getPostsCollectionCount() {
         try {
             SearchRequest searchRequest = new SearchRequest();
@@ -274,7 +285,8 @@ public class SearchServiceImpl implements SearchService {
                         + "is_essential INTEGER, "
                         + "created_at BIGINT, "
                         + "updated_at BIGINT"
-                        + ") charset_table = '0..9, A..Z->a..z, _, a..z, chinese' morphology = 'icu_chinese'",
+                        + ") charset_table = '0..9, A..Z->a..z, _, a..z, chinese' morphology = 'icu_chinese'"
+                        + " rt_flush_period = '300'",
                 true);
         log.info("Created posts index with Chinese+English charset and ICU morphology");
     }
@@ -289,7 +301,8 @@ public class SearchServiceImpl implements SearchService {
                         + "role INTEGER, "
                         + "is_active INTEGER, "
                         + "created_at BIGINT"
-                        + ") charset_table = '0..9, A..Z->a..z, _, a..z, chinese' morphology = 'icu_chinese'",
+                        + ") charset_table = '0..9, A..Z->a..z, _, a..z, chinese' morphology = 'icu_chinese'"
+                        + " rt_flush_period = '300'",
                 true);
         log.info("Created users index with Chinese+English charset and ICU morphology");
     }
