@@ -234,7 +234,8 @@ public class CommentsServiceImpl extends ServiceImpl<CommentsMapper, Comments> i
         QueryWrapper wrapper = QueryWrapper.create()
                 .where(COMMENTS.IS_DELETED.eq(0))
                 .orderBy(COMMENTS.CREATED_AT, false);
-        return getMapper().paginate(pageNumber, pageSize, wrapper);
+        // 带关联查询，填充评论作者（user）与所属帖子（post）
+        return getMapper().paginateWithRelations(pageNumber, pageSize, wrapper);
     }
 
     @Override

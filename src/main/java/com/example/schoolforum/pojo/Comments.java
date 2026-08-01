@@ -34,6 +34,11 @@ public class Comments implements Serializable {
     @Schema(description = "评论作者ID", example = "1")
     private Long authorId;
 
+    @RelationManyToOne(selfField = "authorId", targetField = "id")
+    @Column(ignore = true)
+    @Schema(description = "评论作者")
+    private Users user;
+
     @Schema(description = "评论内容", example = "这篇文章写得很好！")
     private String content;
 
