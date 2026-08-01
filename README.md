@@ -6,6 +6,17 @@
 
 ---
 
+## 项目地址
+
+| 项目 | 地址 |
+|------|------|
+| 在线站点（用户端） | https://schoolforum.sugu6.top |
+| 管理后台 | https://schoolforum.sugu6.top/admin/ |
+| GitHub | https://github.com/sugu6/schoolforum-backend |
+| Gitee | https://gitee.com/y3342113181/schoolforum-backend |
+
+---
+
 ## 项目简介
 
 海语后端是校园论坛社区平台的服务端，基于 Spring Boot 构建，提供用户认证、帖子管理、评论系统、实时消息等功能的 RESTful API。
@@ -53,7 +64,7 @@
 1. **克隆项目**
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/sugu6/schoolforum-backend.git
 cd schoolforum-backend
 ```
 
