@@ -357,8 +357,9 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
 
         tagsService.removePostTags(postId);
 
-        this.removeById(postId);
+        // 先删搜索索引，失败则抛异常回滚，避免 DB 已删而索引残留死链
         searchService.deletePost(postId);
+        this.removeById(postId);
 
         if (categoryId != null) {
             categoriesService.updatePostCount(categoryId);
@@ -424,7 +425,8 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
     }
 
     @Override
-    public Page<Posts> listByCategory(Long categoryId, int pageNumber, int pageSize) {
+    public Page<Posts> listByCategory(Long categoryId, int pageNumber, int pageSize, String keyword,
+                                      Boolean isPinned, Boolean isEssential) {
         List<Long> categoryIds = getCategoryIds(categoryId);
 
         QueryWrapper wrapper = postQueryHelper.buildBaseQueryWithRelations()
@@ -433,6 +435,15 @@ public class PostsServiceImpl extends ServiceImpl<PostsMapper, Posts> implements
 
         if (!categoryIds.isEmpty()) {
             wrapper.where(POSTS.CATEGORY_ID.in(categoryIds));
+        }
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            wrapper.where(POSTS.TITLE.like(keyword.trim()));
+        }
+        if (isPinned != null) {
+            wrapper.where(POSTS.IS_PINNED.eq(isPinned ? PinnedStatus.PINNED : PinnedStatus.NOT_PINNED));
+        }
+        if (isEssential != null) {
+            wrapper.where(POSTS.IS_ESSENTIAL.eq(isEssential ? EssentialStatus.ESSENTIAL : EssentialStatus.NOT_ESSENTIAL));
         }
 
         Page<Posts> page = postsMapper.paginate(pageNumber, pageSize, wrapper);

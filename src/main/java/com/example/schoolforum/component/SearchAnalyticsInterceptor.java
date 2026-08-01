@@ -1,8 +1,6 @@
 package com.example.schoolforum.component;
 
 import com.example.schoolforum.pojo.document.PopularQueryDocument;
-import com.example.schoolforum.service.impl.SearchServiceImpl;
-import com.manticoresearch.client.ApiException;
 import com.manticoresearch.client.api.IndexApi;
 import com.manticoresearch.client.api.SearchApi;
 import com.manticoresearch.client.api.UtilsApi;
@@ -26,6 +24,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Component
 @RequiredArgsConstructor
 public class SearchAnalyticsInterceptor implements HandlerInterceptor {
+
+    /**
+     * 使用 IF NOT EXISTS 幂等建表，避免依赖"索引不存在"的特定错误码（Manticore 对未知表返回 500 而非 404）。
+     * 联想词功能不依赖此表；本表仅用于热词统计。
+     */
+    private static final String POPULAR_QUERIES_DDL =
+            "CREATE TABLE IF NOT EXISTS " + PopularQueryDocument.INDEX_NAME + " ("
+                    + "keyword TEXT, "
+                    + "count BIGINT"
+                    + ") charset_table = '0..9, A..Z->a..z, _, a..z, chinese' morphology = 'icu_chinese' min_prefix_len = '1'";
 
     private final IndexApi indexApi;
     private final SearchApi searchApi;
@@ -99,27 +107,16 @@ public class SearchAnalyticsInterceptor implements HandlerInterceptor {
         }
     }
 
-    private void ensurePopularQueriesIndex() throws ApiException {
+    private void ensurePopularQueriesIndex() {
         if (indexEnsured.get()) {
             return;
         }
         try {
-            SearchRequest testRequest = new SearchRequest();
-            testRequest.setIndex(PopularQueryDocument.INDEX_NAME);
-            Map<String, Object> queryMap = new HashMap<>();
-            queryMap.put("match_all", null);
-            testRequest.setQuery(queryMap);
-            testRequest.setLimit(0);
-            searchApi.search(testRequest);
+            utilsApi.sql(POPULAR_QUERIES_DDL, true);
             indexEnsured.set(true);
-        } catch (ApiException e) {
-            if (e.getCode() == 404) {
-                utilsApi.sql(SearchServiceImpl.POPULAR_QUERIES_DDL, true);
-                log.info("Created popular_queries index with Chinese+English charset, ICU morphology and min_prefix_len=1");
-                indexEnsured.set(true);
-            } else {
-                throw e;
-            }
+            log.info("Created popular_queries index with ICU Chinese morphology");
+        } catch (Exception e) {
+            log.debug("Failed to ensure popular queries index: {}", e.getMessage());
         }
     }
 }

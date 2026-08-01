@@ -1,12 +1,14 @@
 package com.example.schoolforum.service.impl;
 
 import com.example.schoolforum.component.PostQueryHelper;
+import com.example.schoolforum.component.PostStatsCache;
+import com.example.schoolforum.component.PostViewCountCache;
+import com.example.schoolforum.exception.BusinessException;
 import com.example.schoolforum.mapper.PostsMapper;
 import com.example.schoolforum.mapper.UsersMapper;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.example.schoolforum.pojo.Posts;
 import com.example.schoolforum.pojo.Users;
-import com.example.schoolforum.pojo.document.PopularQueryDocument;
 import com.example.schoolforum.pojo.document.PostDocument;
 import com.example.schoolforum.pojo.document.UserDocument;
 import com.example.schoolforum.pojo.dto.CombinedSearchResult;
@@ -34,6 +36,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -41,18 +44,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class SearchServiceImpl implements SearchService {
 
-    public static final String POPULAR_QUERIES_DDL =
-            "CREATE TABLE " + PopularQueryDocument.INDEX_NAME + " ("
-                    + "keyword TEXT, "
-                    + "count BIGINT"
-                    + ") charset_table = '0..9, A..Z->a..z, _, a..z, chinese' morphology = 'icu_chinese' min_prefix_len = '1'";
-
     private final IndexApi indexApi;
     private final SearchApi searchApi;
     private final UtilsApi utilsApi;
     private final PostQueryHelper postQueryHelper;
     private final PostsMapper postsMapper;
     private final UsersMapper usersMapper;
+    private final PostStatsCache postStatsCache;
+    private final PostViewCountCache viewCountCache;
 
     @Override
     public void deletePost(Long postId) {
@@ -62,6 +61,7 @@ public class SearchServiceImpl implements SearchService {
             indexApi.delete(deleteRequest);
         } catch (ApiException e) {
             log.error("Failed to delete post {}: {}", postId, e.getMessage(), e);
+            throw new RuntimeException("删除帖子搜索索引失败: " + e.getMessage(), e);
         }
     }
 
@@ -91,6 +91,7 @@ public class SearchServiceImpl implements SearchService {
             indexApi.delete(deleteRequest);
         } catch (ApiException e) {
             log.error("Failed to delete user {}: {}", userId, e.getMessage(), e);
+            throw new RuntimeException("删除用户搜索索引失败: " + e.getMessage(), e);
         }
     }
 
@@ -107,92 +108,41 @@ public class SearchServiceImpl implements SearchService {
 
     @Override
     public List<KeywordSuggestion> getKeywordSuggestions(String prefix, int limit) {
-        try {
-            ensurePopularQueriesIndex();
-        } catch (ApiException e) {
-            log.error("Failed to create popular queries index: {}", e.getMessage(), e);
+        if (prefix == null || prefix.trim().isEmpty()) {
             return new ArrayList<>();
         }
-
+        String keyword = prefix.trim();
         try {
-            SearchRequest searchRequest = new SearchRequest();
-            searchRequest.setIndex(PopularQueryDocument.INDEX_NAME);
-
-            Map<String, Object> matchQuery = new HashMap<>();
-            matchQuery.put("keyword", prefix + "*");
-            Map<String, Object> queryMap = new HashMap<>();
-            queryMap.put("match", matchQuery);
-            searchRequest.setQuery(queryMap);
-
-            searchRequest.setLimit(limit);
-            searchRequest.setSort(new ArrayList<>(List.of(Map.of("count", "desc"))));
-
-            SearchResponse response = searchApi.search(searchRequest);
-            List<?> rawHits = response.getHits().getHits();
-
-            List<KeywordSuggestion> suggestions = rawHits.stream()
-                    .map(rawHit -> {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> hit = (Map<String, Object>) rawHit;
-                        Map<String, Object> source = hit.get("_source") instanceof Map
-                                ? (Map<String, Object>) hit.get("_source")
-                                : new HashMap<>();
-                        Object countObj = source.get("count");
-                        Long count = countObj instanceof Number ? ((Number) countObj).longValue() : 0L;
-                        Object scoreObj = hit.get("_score");
-                        Double score = scoreObj instanceof Number ? ((Number) scoreObj).doubleValue() : 0.0;
-                        return KeywordSuggestion.builder()
-                                .keyword((String) source.get("keyword"))
-                                .count(count)
-                                .score(score)
-                                .build();
-                    })
+            // 纯数据库实现：按帖子标题前缀匹配联想词，不依赖 Manticore 索引/建表
+            String likePattern = escapeLikePattern(keyword);
+            QueryWrapper wrapper = QueryWrapper.create()
+                    .select("DISTINCT title")
+                    .from(Posts.class)
+                    .likeRight("title", likePattern)
+                    .orderBy("title", true)
+                    .limit(limit);
+            return postsMapper.selectListByQueryAs(wrapper, String.class)
+                    .stream()
+                    .map(title -> KeywordSuggestion.builder()
+                            .keyword(title)
+                            .count(0L)
+                            .score(0.0)
+                            .build())
                     .collect(Collectors.toList());
-
-            if (!suggestions.isEmpty()) {
-                return suggestions;
-            }
-
-            return getFallbackSuggestionsFromPosts(prefix, limit);
         } catch (Exception e) {
-            log.debug("Failed to get keyword suggestions: {}", e.getMessage());
+            log.warn("获取搜索联想词失败: prefix={}, error={}", keyword, e.getMessage());
             return new ArrayList<>();
         }
     }
 
-    private List<KeywordSuggestion> getFallbackSuggestionsFromPosts(String prefix, int limit) {
-        QueryWrapper wrapper = QueryWrapper.create()
-                .select("DISTINCT title")
-                .from(Posts.class)
-                .likeLeft("title", prefix)
-                .limit(limit);
-        return postsMapper.selectListByQueryAs(wrapper, String.class)
-                .stream()
-                .map(title -> KeywordSuggestion.builder()
-                        .keyword(title)
-                        .count(0L)
-                        .score(0.0)
-                        .build())
-                .collect(Collectors.toList());
-    }
-
-    private void ensurePopularQueriesIndex() throws ApiException {
-        try {
-            SearchRequest testRequest = new SearchRequest();
-            testRequest.setIndex(PopularQueryDocument.INDEX_NAME);
-            Map<String, Object> queryMap = new HashMap<>();
-            queryMap.put("match_all", null);
-            testRequest.setQuery(queryMap);
-            testRequest.setLimit(0);
-            searchApi.search(testRequest);
-        } catch (ApiException e) {
-            if (e.getCode() == 404) {
-                utilsApi.sql(POPULAR_QUERIES_DDL, true);
-                log.info("Created popular_queries index with ICU Chinese morphology");
-            } else {
-                throw e;
-            }
-        }
+    /**
+     * 转义 LIKE 通配符，避免用户输入 % _ \ 影响匹配语义。
+     */
+    private String escapeLikePattern(String keyword) {
+        return keyword
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
     }
 
     @Override
@@ -419,6 +369,9 @@ public class SearchServiceImpl implements SearchService {
                     })
                     .collect(Collectors.toList());
 
+            // 用实时计数回填，避免索引快照里的过时统计
+            fillRealTimeStatsForSearch(hits);
+
             return SearchResult.<PostSearchDocument>builder()
                     .query(query)
                     .totalHits(totalHits)
@@ -429,7 +382,7 @@ public class SearchServiceImpl implements SearchService {
                     .build();
         } catch (Exception e) {
             log.error("Failed to search posts: {}", e.getMessage(), e);
-            return SearchResult.<PostSearchDocument>builder().query(query).hits(new ArrayList<>()).build();
+            throw new BusinessException("搜索服务暂不可用，请稍后重试");
         }
     }
 
@@ -443,6 +396,11 @@ public class SearchServiceImpl implements SearchService {
             Map<String, Object> queryMap = new HashMap<>();
             queryMap.put("match", matchQuery);
             searchRequest.setQuery(queryMap);
+
+            // 过滤被禁用账号
+            Map<String, Object> attrFilter = new HashMap<>();
+            attrFilter.put("is_active", 1);
+            searchRequest.setAttrFilter(attrFilter);
 
             searchRequest.setLimit(pageSize);
             searchRequest.setOffset((page - 1) * pageSize);
@@ -479,7 +437,44 @@ public class SearchServiceImpl implements SearchService {
                     .build();
         } catch (Exception e) {
             log.error("Failed to search users: {}", e.getMessage(), e);
-            return SearchResult.<UserSearchDocument>builder().query(query).hits(new ArrayList<>()).build();
+            throw new BusinessException("搜索服务暂不可用，请稍后重试");
+        }
+    }
+
+    private void fillRealTimeStatsForSearch(List<PostSearchDocument> hits) {
+        if (hits == null || hits.isEmpty()) {
+            return;
+        }
+        try {
+            List<Long> postIds = hits.stream()
+                    .map(PostSearchDocument::getId)
+                    .filter(Objects::nonNull)
+                    .toList();
+            if (postIds.isEmpty()) {
+                return;
+            }
+            Map<Long, Integer> viewCounts = viewCountCache.batchGetRealTimeViewCount(postIds);
+            Map<Long, Integer> likeCounts = postStatsCache.batchGetRealTimeLikeCount(postIds);
+            Map<Long, Integer> commentCounts = postStatsCache.batchGetRealTimeCommentCount(postIds);
+            Map<Long, Integer> favoriteCounts = postStatsCache.batchGetRealTimeFavoriteCount(postIds);
+            for (PostSearchDocument hit : hits) {
+                Long id = hit.getId();
+                if (id == null) {
+                    continue;
+                }
+                applyPositive(viewCounts.get(id), hit::setViewCount);
+                applyPositive(likeCounts.get(id), hit::setLikeCount);
+                applyPositive(commentCounts.get(id), hit::setCommentCount);
+                applyPositive(favoriteCounts.get(id), hit::setFavoriteCount);
+            }
+        } catch (Exception e) {
+            log.warn("回填搜索结果实时统计失败: {}", e.getMessage());
+        }
+    }
+
+    private void applyPositive(Integer value, java.util.function.IntConsumer setter) {
+        if (value != null && value > 0) {
+            setter.accept(value);
         }
     }
 

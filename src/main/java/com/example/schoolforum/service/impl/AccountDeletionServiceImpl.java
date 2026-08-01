@@ -198,14 +198,23 @@ public class AccountDeletionServiceImpl extends ServiceImpl<AccountDeletionReque
 
         for (Long postId : postIds) {
             commentsMapper.deleteByQuery(QueryWrapper.create().where(COMMENTS.POST_ID.eq(postId)));
-            searchService.deletePost(postId);
+            try {
+                searchService.deletePost(postId);
+            } catch (Exception e) {
+                // 索引删除失败不阻塞账户注销，避免 Manticore 短暂不可用时清理中断
+                log.warn("注销时删除帖子搜索索引失败: postId={}, error={}", postId, e.getMessage());
+            }
         }
 
         postsMapper.deleteByQuery(QueryWrapper.create().where(POSTS.AUTHOR_ID.eq(userId)));
 
         commentsMapper.deleteByQuery(QueryWrapper.create().where(COMMENTS.AUTHOR_ID.eq(userId)));
 
-        searchService.deleteUser(userId);
+        try {
+            searchService.deleteUser(userId);
+        } catch (Exception e) {
+            log.warn("注销时删除用户搜索索引失败: userId={}, error={}", userId, e.getMessage());
+        }
 
         usersMapper.deleteById(userId);
 

@@ -87,9 +87,12 @@ public class PostsController {
     public Page<Posts> listPage(
             @RequestParam(defaultValue = "1") int pageNumber,
             @RequestParam(defaultValue = "10") int pageSize,
-            @Parameter(description = "分类ID，不传则查询所有，支持一级分类自动包含子分类") @RequestParam(required = false) Long categoryId) {
+            @Parameter(description = "分类ID，不传则查询所有，支持一级分类自动包含子分类") @RequestParam(required = false) Long categoryId,
+            @Parameter(description = "标题关键字") @RequestParam(required = false) String keyword,
+            @Parameter(description = "置顶筛选：true-已置顶，false-未置顶") @RequestParam(required = false) Boolean isPinned,
+            @Parameter(description = "精华筛选：true-精华，false-非精华") @RequestParam(required = false) Boolean isEssential) {
         if (pageSize > 100) pageSize = 100;
-        return postsService.listByCategory(categoryId, pageNumber, pageSize);
+        return postsService.listByCategory(categoryId, pageNumber, pageSize, keyword, isPinned, isEssential);
     }
 
     @GetMapping("/list")

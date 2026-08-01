@@ -89,8 +89,10 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
-    public Result<Void> handleNoResourceFoundException(NoResourceFoundException e, HttpServletRequest request) {
+    public Result<Void> handleNoResourceFoundException(NoResourceFoundException e, HttpServletRequest request,
+                                                      HttpServletResponse response) {
         log.debug("资源未找到: {}", request.getRequestURI());
+        response.setStatus(HttpServletResponse.SC_NOT_FOUND);
         return Result.error(404, "资源未找到");
     }
 

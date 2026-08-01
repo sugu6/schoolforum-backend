@@ -32,7 +32,8 @@ public interface PostsService extends IService<Posts> {
 
     Page<Posts> list(int pageNumber, int pageSize);
 
-    Page<Posts> listByCategory(Long categoryId, int pageNumber, int pageSize);
+    Page<Posts> listByCategory(Long categoryId, int pageNumber, int pageSize, String keyword,
+                               Boolean isPinned, Boolean isEssential);
 
     Page<Posts> listPage(int pageNumber, int pageSize);
 

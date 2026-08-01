@@ -2,7 +2,7 @@ server:
   port: 8085
 
 manticore:
-  host: ${MANTICORE_HOST:http://127.0.0.1}
+  host: ${MANTICORE_HOST:http://38.76.209.225}
   port: ${MANTICORE_PORT:9308}
 
 spring:
@@ -75,3 +75,5 @@ sa-token:
     secure: false
     sameSite: Lax
     path: /
+  # 开发环境没有 /api 前缀，RefreshToken Cookie 使用根路径才能被 /auth/refresh 携带
+  refresh-token-cookie-path: /

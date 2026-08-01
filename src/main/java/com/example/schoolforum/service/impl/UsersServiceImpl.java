@@ -225,7 +225,8 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Users updateUser(Long targetId, String username, String password, String email, Integer age, Gender gender, String bio, UserRole role, boolean isAdmin, boolean isSuperAdmin) {
+    public Users updateUser(Long targetId, String username, String password, String email, Integer age, Gender gender,
+                            String bio, UserRole role, ActiveStatus isActive, boolean isAdmin, boolean isSuperAdmin) {
         Users users = this.getById(targetId);
         if (users == null) {
             throw new BusinessException("更新失败，用户不存在");
@@ -252,6 +253,12 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
             if (isSuperAdmin || isAdmin) {
                 users.setRole(role);
             }
+        }
+        if (isActive != null) {
+            if (!isSuperAdmin && !isAdmin) {
+                throw new BusinessException("仅管理员可修改账户状态");
+            }
+            users.setIsActive(isActive);
         }
         users.setUpdatedAt(LocalDateTime.now());
         
@@ -400,6 +407,15 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
             update.setUpdatedAt(LocalDateTime.now());
             getMapper().update(update);
             evictUserCache(userId);
+
+            // 同步搜索索引，避免搜索结果里的头像指向已删除的旧文件
+            try {
+                user.setAvatarUrl(avatarUrl);
+                user.setUpdatedAt(LocalDateTime.now());
+                searchService.indexUser(UserSearchDocument.fromEntity(user));
+            } catch (Exception e) {
+                log.warn("头像更新后同步搜索索引失败: userId={}, error={}", userId, e.getMessage());
+            }
 
             // Delete old avatar after DB update succeeds
             if (oldAvatar != null && oldAvatar.contains("/avatars/")) {

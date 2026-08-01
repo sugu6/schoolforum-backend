@@ -25,7 +25,6 @@ public class RefreshTokenCookieUtils {
     public static final String REFRESH_TOKEN_COOKIE = "RefreshToken";
     public static final String ACCESS_TOKEN_COOKIE = "Authorization";
     public static final long REFRESH_TOKEN_MAX_AGE = 7 * 24 * 60 * 60L; // 7 天
-    public static final String REFRESH_TOKEN_PATH = "/api/auth";
 
     @Value("${sa-token.cookie.secure:false}")
     private boolean cookieSecure;
@@ -34,18 +33,26 @@ public class RefreshTokenCookieUtils {
     private String cookieSameSite;
 
     /**
+     * Refresh Token Cookie 的 path。
+     * 生产环境（nginx 剥离 /api 前缀）使用 /api/auth；
+     * 开发环境（无 context-path，直接访问 /auth/refresh）需配置为 / 才能把 Cookie 带到刷新接口。
+     */
+    @Value("${sa-token.refresh-token-cookie-path:/api/auth}")
+    private String refreshTokenPath;
+
+    /**
      * 设置 Refresh Token Cookie（httpOnly + Secure + SameSite=Lax）
      */
     public void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
         ResponseCookie cookie = ResponseCookie.from(REFRESH_TOKEN_COOKIE, refreshToken)
-                .path(REFRESH_TOKEN_PATH)
+                .path(refreshTokenPath)
                 .httpOnly(true)
                 .sameSite(cookieSameSite)
                 .secure(cookieSecure)
                 .maxAge(Duration.ofSeconds(REFRESH_TOKEN_MAX_AGE))
                 .build();
         response.addHeader("Set-Cookie", cookie.toString());
-        log.debug("设置 RefreshToken Cookie: secure={}, path={}", cookieSecure, REFRESH_TOKEN_PATH);
+        log.debug("设置 RefreshToken Cookie: secure={}, path={}", cookieSecure, refreshTokenPath);
     }
 
     /**
@@ -53,9 +60,9 @@ public class RefreshTokenCookieUtils {
      * 同时清除旧 path (/auth) 的 Cookie，兼容 Cookie path 从 /auth 迁移到 /api/auth 的用户
      */
     public void clearRefreshTokenCookie(HttpServletResponse response) {
-        // 清除新 path (/api/auth) 的 Cookie
+        // 清除当前配置 path 的 Cookie
         ResponseCookie cookie = ResponseCookie.from(REFRESH_TOKEN_COOKIE, "")
-                .path(REFRESH_TOKEN_PATH)
+                .path(refreshTokenPath)
                 .httpOnly(true)
                 .sameSite(cookieSameSite)
                 .secure(cookieSecure)

@@ -20,6 +20,7 @@ import java.util.List;
 public class SearchController {
 
     private final SearchService searchService;
+    private final Object syncLock = new Object();
 
     @GetMapping
     @Operation(summary = "综合搜索", description = "一次获取帖子和用户的搜索结果")
@@ -38,6 +39,8 @@ public class SearchController {
             @Parameter(description = "输入前缀", required = true) @RequestParam String prefix,
             @Parameter(description = "返回数量，默认8条") @RequestParam(defaultValue = "8") int limit) {
         if (prefix.length() > 200) prefix = prefix.substring(0, 200);
+        if (limit < 1) limit = 8;
+        if (limit > 20) limit = 20;
         return searchService.getKeywordSuggestions(prefix, limit);
     }
 
@@ -45,19 +48,23 @@ public class SearchController {
     @Operation(summary = "重建索引", description = "删除旧索引并全量同步数据")
     @SaCheckRole(value = {"admin", "super_admin"}, mode = SaMode.OR)
     public String sync() {
-        searchService.deleteAllIndexes();
-        searchService.syncAllPosts();
-        searchService.syncAllUsers();
-        long postCount = searchService.getPostsCollectionCount();
-        long userCount = searchService.getUsersCollectionCount();
-        return String.format("索引重建完成（帖子：%d 条，用户：%d 条）", postCount, userCount);
+        synchronized (syncLock) {
+            searchService.deleteAllIndexes();
+            searchService.syncAllPosts();
+            searchService.syncAllUsers();
+            long postCount = searchService.getPostsCollectionCount();
+            long userCount = searchService.getUsersCollectionCount();
+            return String.format("索引重建完成（帖子：%d 条，用户：%d 条）", postCount, userCount);
+        }
     }
 
     @DeleteMapping("/sync")
     @Operation(summary = "清空索引", description = "清空所有搜索索引数据")
     @SaCheckRole(value = {"admin", "super_admin"}, mode = SaMode.OR)
     public String clear() {
-        searchService.deleteAllIndexes();
-        return "所有索引已清空";
+        synchronized (syncLock) {
+            searchService.deleteAllIndexes();
+            return "所有索引已清空";
+        }
     }
 }

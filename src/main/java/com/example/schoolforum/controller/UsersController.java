@@ -124,10 +124,11 @@ public class UsersController {
     @Operation(summary = "删除用户", description = "根据ID删除用户")
     @SaCheckRole(value = {"admin", "super_admin"}, mode = SaMode.OR)
     public String remove(@Parameter(description = "用户ID") @PathVariable Long id) {
+        // 先删搜索索引，失败则中止，避免 DB 已删而索引残留
+        searchService.deleteUser(id);
         if (!usersService.removeById(id)) {
             throw new BusinessException("删除失败，用户不存在");
         }
-        searchService.deleteUser(id);
         return "删除成功";
     }
 
@@ -144,7 +145,9 @@ public class UsersController {
             @RequestParam(required = false) String gender,
             @Parameter(description = "个人简介") @RequestParam(required = false) String bio,
             @Parameter(description = "角色，仅管理员可修改", schema = @Schema(allowableValues = {"USER", "ADMIN", "SUPER_ADMIN"}))
-            @RequestParam(required = false) String role) {
+            @RequestParam(required = false) String role,
+            @Parameter(description = "账户状态，仅管理员可修改", schema = @Schema(allowableValues = {"ACTIVE", "INACTIVE"}))
+            @RequestParam(required = false) ActiveStatus isActive) {
         UserRole userRole = parseUserRole(role);
         Gender userGender = parseGender(gender);
 
@@ -157,7 +160,8 @@ public class UsersController {
             throw new BusinessException("个人简介长度不能超过500个字符");
         }
 
-        return usersService.updateUser(targetId, username, password, email, age, userGender, bio, userRole, isAdmin, isSuperAdmin);
+        return usersService.updateUser(targetId, username, password, email, age, userGender, bio, userRole,
+                isActive, isAdmin, isSuperAdmin);
     }
 
     @GetMapping("list/page")

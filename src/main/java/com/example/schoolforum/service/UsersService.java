@@ -2,6 +2,7 @@ package com.example.schoolforum.service;
 
 import com.example.schoolforum.enums.CodeType;
 import com.example.schoolforum.enums.Gender;
+import com.example.schoolforum.enums.ActiveStatus;
 import com.example.schoolforum.enums.UserRole;
 import com.example.schoolforum.pojo.Users;
 import com.example.schoolforum.pojo.dto.LoginResponse;
@@ -35,7 +36,8 @@ public interface UsersService extends IService<Users> {
 
     Users getByGithubId(String githubId);
 
-    Users updateUser(Long targetId, String username, String password, String email, Integer age, Gender gender, String bio, UserRole role, boolean isAdmin, boolean isSuperAdmin);
+    Users updateUser(Long targetId, String username, String password, String email, Integer age, Gender gender,
+                     String bio, UserRole role, ActiveStatus isActive, boolean isAdmin, boolean isSuperAdmin);
 
     Page<Users> list(int pageNumber, int pageSize);
 
