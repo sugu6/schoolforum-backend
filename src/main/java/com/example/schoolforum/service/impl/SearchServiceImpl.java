@@ -3,10 +3,12 @@ package com.example.schoolforum.service.impl;
 import com.example.schoolforum.component.PostQueryHelper;
 import com.example.schoolforum.component.PostStatsCache;
 import com.example.schoolforum.component.PostViewCountCache;
+import com.example.schoolforum.enums.ActiveStatus;
 import com.example.schoolforum.exception.BusinessException;
 import com.example.schoolforum.mapper.PostsMapper;
 import com.example.schoolforum.mapper.UsersMapper;
 import com.mybatisflex.core.query.QueryWrapper;
+import com.mybatisflex.core.paginate.Page;
 import com.example.schoolforum.pojo.Posts;
 import com.example.schoolforum.pojo.Users;
 import com.example.schoolforum.pojo.document.PostDocument;
@@ -38,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -114,19 +117,31 @@ public class SearchServiceImpl implements SearchService {
         }
         String keyword = prefix.trim();
         try {
-            // 纯数据库实现：按帖子标题前缀匹配联想词，不依赖 Manticore 索引/建表
+            // 纯数据库实现：帖子标题 + 已激活用户名前缀匹配，不依赖 Manticore 索引/建表
             String likePattern = escapeLikePattern(keyword);
-            QueryWrapper wrapper = QueryWrapper.create()
+            // MyBatis-Flex: likeLeft 生成 LIKE '值%'（前缀匹配），likeRight 是 LIKE '%值'（后缀）
+            QueryWrapper titleWrapper = QueryWrapper.create()
                     .select("DISTINCT title")
                     .from(Posts.class)
-                    // MyBatis-Flex: likeLeft 生成 LIKE '值%'（前缀匹配），likeRight 是 LIKE '%值'（后缀）
                     .likeLeft("title", likePattern)
                     .orderBy("title", true)
                     .limit(limit);
-            return postsMapper.selectListByQueryAs(wrapper, String.class)
-                    .stream()
-                    .map(title -> KeywordSuggestion.builder()
-                            .keyword(title)
+            List<String> titles = postsMapper.selectListByQueryAs(titleWrapper, String.class);
+
+            QueryWrapper userWrapper = QueryWrapper.create()
+                    .select("DISTINCT username")
+                    .from(Users.class)
+                    .likeLeft("username", likePattern)
+                    .where(Users::getIsActive).eq(ActiveStatus.ACTIVE)
+                    .orderBy("username", true)
+                    .limit(limit);
+            List<String> usernames = usersMapper.selectListByQueryAs(userWrapper, String.class);
+
+            return Stream.concat(titles.stream(), usernames.stream())
+                    .distinct()
+                    .limit(limit)
+                    .map(key -> KeywordSuggestion.builder()
+                            .keyword(key)
                             .count(0L)
                             .score(0.0)
                             .build())
@@ -394,52 +409,45 @@ public class SearchServiceImpl implements SearchService {
     }
 
     private SearchResult<UserSearchDocument> searchUsersInternal(String query, int page, int pageSize) {
+        String keyword = query == null ? "" : query.trim();
         try {
-            SearchRequest searchRequest = new SearchRequest();
-            searchRequest.setIndex(UserDocument.INDEX_NAME);
+            if (keyword.isEmpty()) {
+                return SearchResult.<UserSearchDocument>builder()
+                        .query(query)
+                        .totalHits(0L)
+                        .hitsPerPage(pageSize)
+                        .page(page)
+                        .totalPages(0)
+                        .hits(new ArrayList<>())
+                        .build();
+            }
 
-            Map<String, Object> matchQuery = new HashMap<>();
-            matchQuery.put("username,bio", query);
-            Map<String, Object> queryMap = new HashMap<>();
-            queryMap.put("match", matchQuery);
-            searchRequest.setQuery(queryMap);
+            // 模糊查询：username/bio 包含关键词（LIKE '%关键词%'），仅已激活用户
+            String likePattern = escapeLikePattern(keyword);
+            QueryWrapper wrapper = QueryWrapper.create();
+            wrapper.where(Users::getIsActive).eq(ActiveStatus.ACTIVE);
+            wrapper.and("(username LIKE ? OR bio LIKE ?)", likePattern, likePattern);
+            wrapper.orderBy("id", true);
+            Page<Users> userPage = usersMapper.paginate(page, pageSize, wrapper);
 
-            // 过滤被禁用账号
-            Map<String, Object> attrFilter = new HashMap<>();
-            attrFilter.put("is_active", 1);
-            searchRequest.setAttrFilter(attrFilter);
-
-            searchRequest.setLimit(pageSize);
-            searchRequest.setOffset((page - 1) * pageSize);
-
-            SearchResponse response = searchApi.search(searchRequest);
-            Long totalHits = response.getHits().getTotal() != null ? response.getHits().getTotal() : 0L;
-
-            List<UserSearchDocument> hits = response.getHits().getHits().stream()
-                    .map(rawHit -> {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> hit = (Map<String, Object>) rawHit;
-                        Map<String, Object> source = hit.get("_source") instanceof Map
-                                ? (Map<String, Object>) hit.get("_source")
-                                : new HashMap<>();
-                        return UserSearchDocument.builder()
-                                .id(toLong(hit.get("_id")))
-                                .username((String) source.get("username"))
-                                .email(null)
-                                .avatarUrl((String) source.get("avatar_url"))
-                                .bio((String) source.get("bio"))
-                                .role(toRoleString(toInteger(source.get("role"))))
-                                .isActive(toBoolean(source.get("is_active")) ? 1 : 0)
-                                .build();
-                    })
+            List<UserSearchDocument> hits = userPage.getRecords().stream()
+                    .map(u -> UserSearchDocument.builder()
+                            .id(u.getId())
+                            .username(u.getUsername())
+                            .email(null)
+                            .avatarUrl(u.getAvatarUrl())
+                            .bio(u.getBio())
+                            .role(u.getRole() != null ? u.getRole().name() : "USER")
+                            .isActive(u.getIsActive() != null && u.getIsActive() == ActiveStatus.ACTIVE ? 1 : 0)
+                            .build())
                     .collect(Collectors.toList());
 
             return SearchResult.<UserSearchDocument>builder()
                     .query(query)
-                    .totalHits(totalHits)
+                    .totalHits(userPage.getTotalRow())
                     .hitsPerPage(pageSize)
                     .page(page)
-                    .totalPages((int) Math.ceil((double) totalHits / pageSize))
+                    .totalPages((int) userPage.getTotalPage())
                     .hits(hits)
                     .build();
         } catch (Exception e) {
